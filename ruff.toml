@@ -1,0 +1,33 @@
+indent-width = 4
+line-length = 120
+target-version = "py310"
+
+[lint]
+# Matches _, __, and _var but not _var_
+dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
+fixable = ["ALL"]
+ignore = [
+  "D100",
+  "D203",
+  "D213",
+  "D400",
+  "D401",
+  "D415",
+  "PLR0912",
+  "PLR0913",
+  "PLR0915",
+  "RUF012"
+]
+select = ["E", "W", "F", "I", "B", "D", "RET", "RUF", "PL", "PIE", "FLY"]
+unfixable = []
+
+[lint.per-file-ignores]
+# Binary protocol code: the numbers ARE the wire format. Buffer-length guards like `len(raw) < 5`
+# and LWP3 message/device ids read worse as invented constants than as the spec's own values.
+"bridge/transport.py" = ["PLR2004"]
+"bridge/low_level_control.py" = ["PLR2004"]
+# Entry-point scripts: local helpers around a control loop, not a documented API surface.
+"gamepad_bridge.py" = ["D103"]
+"probe_hub.py" = ["D103"]
+# Tests: the wire bytes are the subject under test, and asserting is the point.
+"tests/*" = ["D", "PLR2004"]

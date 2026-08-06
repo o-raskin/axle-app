@@ -1,0 +1,36 @@
+# Single source of truth for lint/format rules — CI runs the same via
+# `pre-commit run --all-files` (see .github/workflows/lint.yml).
+# Contributors: pip install pre-commit && pre-commit install
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: check-ast
+      - id: check-yaml
+      - id: check-toml
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.16.1
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v2.3.0
+    hooks:
+      - id: mypy
+        # --strict flags untyped defs; missing 3rd-party stubs treated as Any.
+        # Tests are excluded: pytest fixtures and the fake hub are untyped by design.
+        exclude: ^tests/
+        args: [--strict, --ignore-missing-imports, --scripts-are-modules]
+  - repo: local
+    hooks:
+      - id: pytest
+        name: pytest
+        entry: python -m pytest tests -q
+        # Its own env, so CI does not depend on pytest being in the system interpreter.
+        language: python
+        additional_dependencies: [pytest, bleak]
+        pass_filenames: false
+        always_run: true

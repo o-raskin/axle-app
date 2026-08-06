@@ -1,0 +1,16 @@
+{
+  "name": "Sony DualSense",
+  "buttons": {
+    "brake": 9,
+    "boost": 10,
+    "lights": 3
+  },
+  "axes": {
+    "steer": 0,
+    "throttle_forward": 5,
+    "throttle_reverse": 4
+  },
+  "deadzone": 0.15,
+  "triggers_rest_negative": true,
+  "controls": "Left X: steer | R2/L2: drive | L1: brake | R1: boost | Triangle: headlights"
+}

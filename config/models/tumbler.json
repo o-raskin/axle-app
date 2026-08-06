@@ -1,0 +1,32 @@
+{
+  "name": "42239 Batmobile Tumbler",
+  "program_id": 0,
+  "control": {
+    "brake": 1,
+    "drive_mode": 2,
+    "boost": 4,
+    "calibrate": 8,
+    "good_to_go": 16,
+    "reverse": 32,
+    "attack": 128
+  },
+  "control2": {
+    "lights_off": 1,
+    "flicker": 2,
+    "attack_lights": 4
+  },
+  "calibration_pace_s": {
+    "after_start": 0.051,
+    "after_subscribe": 0.26,
+    "after_good_to_go": 0.265,
+    "after_calibrate": 0.619
+  },
+  "boost": {
+    "hold_s": 1.95,
+    "cooldown_s": 7.5
+  },
+  "limits": {
+    "drive": 100,
+    "steering": 100
+  }
+}
