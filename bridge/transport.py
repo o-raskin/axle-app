@@ -151,7 +151,7 @@ class TechnicMoveHub:
         if sys.platform != "win32":
             return
         try:
-            from winrt.windows.devices.bluetooth import (  # type: ignore[import-not-found]  # noqa: PLC0415
+            from winrt.windows.devices.bluetooth import (  # noqa: PLC0415
                 BluetoothLEPreferredConnectionParameters as Params,
             )
 

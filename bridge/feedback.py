@@ -267,7 +267,8 @@ def drive_power_for_trigger(trigger_balance: float, max_drive: int, speed_mode: 
 def drive_rumble_strength(trigger_pressure: float, speed_mode: int) -> float:
     """Return proportional drive rumble for the current trigger pressure and speed mode."""
     pressure = max(0.0, min(1.0, trigger_pressure))
-    return DRIVE_RUMBLE_MAX_STRENGTH * SPEED_MODE_RATIOS[speed_mode] * (pressure**DRIVE_RUMBLE_PRESSURE_EXPONENT)
+    strength = DRIVE_RUMBLE_MAX_STRENGTH * SPEED_MODE_RATIOS[speed_mode] * (pressure**DRIVE_RUMBLE_PRESSURE_EXPONENT)
+    return float(strength)
 
 
 def boost_feedback_active(boost: bool, boost_feedback_at: float, now: float) -> bool:

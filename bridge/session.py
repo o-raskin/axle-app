@@ -505,11 +505,9 @@ async def run_live_session(
             flicker = False if crash_active else attack_signal.is_active(now)
             front_lights_on, rocket_lights_on = (False, False) if crash_active else lights.state_for(throttle, now)
 
-            steering = (
-                0
-                if crash_active
-                else axis_to_percent(joystick.get_axis(steer_axis), model.max_steering, pad.deadzone)
-            )
+            steering = 0
+            if not crash_active:
+                steering = axis_to_percent(joystick.get_axis(steer_axis), model.max_steering, pad.deadzone)
             console.update(
                 CarTelemetry(
                     model_name=model.name,

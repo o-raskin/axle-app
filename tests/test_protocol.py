@@ -131,9 +131,7 @@ def test_live_status_reports_are_drained_from_hub(control: tuple[LowLevelControl
     play_vm = port_id(PORT_MAP, "play_vm")
     status = 0x10100
     hub.queue.append(bytes([5, 0, 0x82, play_vm, 0x0A]))
-    hub.queue.append(
-        bytes([12, 0, 0x45, play_vm, 0x03, 0x01, *status.to_bytes(4, "little"), 0, 0])
-    )
+    hub.queue.append(bytes([12, 0, 0x45, play_vm, 0x03, 0x01, *status.to_bytes(4, "little"), 0, 0]))
 
     assert ctl.drain_status_reports() == [(status, ["success", "impact"])]
     assert hub.queue == []
