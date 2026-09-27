@@ -1,7 +1,9 @@
 """PLAYVM: the hub's own control program, and the startup sequence that hands it the motors."""
 
+from __future__ import annotations
+
 import asyncio
-from typing import Any
+from typing import Any, Callable, Protocol
 
 from .port_map import port_id
 from .profiles import ModelProfile
@@ -15,7 +17,6 @@ from .transport import (
     MSG_PORT_INFO,
     MSG_PORT_OUTPUT_FEEDBACK,
     MSG_PORT_VALUE,
-    TechnicMoveHub,
 )
 
 # VmCommands: 0=LoadProgram 1=StartLoadedProgram 2=StopLoadedProgram 3=SetGlobalRegisterVariable
@@ -39,6 +40,40 @@ STATUS_MASKS = {
 STATUS_SUCCESS = 0x00100
 
 
+class PlayVmHub(Protocol):
+    """Transport contract required by the PLAYVM controller."""
+
+    port_infos: dict[int, Any]
+
+    async def send(self, data: bytes | bytearray) -> None:
+        """Send one raw LWP3 message."""
+
+    async def subscribe_port_value(
+        self, port_id: int, mode: int, delta_interval: int = 1, notify_enabled: int = 1
+    ) -> None:
+        """Subscribe to one port value mode."""
+
+    async def request_port_info(self, port_id: int, information_type: int = 0x01) -> None:
+        """Request port metadata."""
+
+    async def request_mode_info(self, port_id: int, mode: int, information_type: int) -> None:
+        """Request mode metadata."""
+
+    async def wait_for(
+        self, what: str, predicate: Callable[[bytes], bool], timeout: float = 3.0
+    ) -> tuple[bytes, float]:
+        """Wait for a matching raw notification."""
+
+    async def wait_for_message(self, what: str, msg_type: int, port: int, *tail: int) -> tuple[bytes, float]:
+        """Wait for one matching LWP3 message."""
+
+    def clear_notifications(self) -> None:
+        """Clear any buffered notifications."""
+
+    def drain_notifications(self) -> list[bytes]:
+        """Take and clear buffered raw notifications."""
+
+
 def decode_vm_status(values: list[int]) -> tuple[int, list[str]]:
     """An inbound PLAYVM frame: [0] VmCommands opcode, [1] variable index, [2:6] int32 LE value."""
     if len(values) < 6 or values[0] != VM_DRIVE or values[1] != STATUS_VARIABLE:
@@ -47,12 +82,21 @@ def decode_vm_status(values: list[int]) -> tuple[int, list[str]]:
     return raw, [name for bit, (name, _fatal) in STATUS_MASKS.items() if raw & bit]
 
 
+def decode_vm_status_report(raw: bytes, play_vm_port: int) -> tuple[int, list[str]] | None:
+    """Decode a subscribed PLAYVM status notification, or ignore unrelated frames."""
+    if len(raw) < 10 or raw[2] != MSG_PORT_VALUE or raw[3] != play_vm_port:
+        return None
+    if raw[4] != VM_DRIVE or raw[5] != STATUS_VARIABLE:
+        return None
+    return decode_vm_status(list(raw[4:10]))
+
+
 class LowLevelControl:
     """Speaks PLAYVM: startup, calibration and drive frames for one model."""
 
     def __init__(
         self,
-        hub: TechnicMoveHub,
+        hub: PlayVmHub,
         port_map: dict[str, Any],
         model: ModelProfile,
         limits: SafetyLimits,
@@ -80,6 +124,8 @@ class LowLevelControl:
         brake: bool = False,
         boost: bool = False,
         lights: bool = True,
+        rocket_lights: bool = False,
+        flicker: bool = False,
     ) -> bytes:
         """One drive frame. Callers say what they want; the model decides which bits that is."""
         control = 0
@@ -87,7 +133,13 @@ class LowLevelControl:
             control |= self.model.bit("brake")
         if boost:
             control |= self.model.bit("boost")
-        control2 = 0 if lights else self.model.bit2("lights_off")
+        control2 = 0
+        if rocket_lights:
+            control2 |= self.model.bit2("attack_lights")
+        if flicker:
+            control2 |= self.model.bit2("flicker")
+        if not lights:
+            control2 |= self.model.bit2("lights_off")
         return await self._drive_raw(speed, steering, control, control2)
 
     async def _drive_raw(self, speed: int, steering: int, control: int, control2: int) -> bytes:
@@ -99,6 +151,15 @@ class LowLevelControl:
             control & 0xFF,
             control2 & 0xFF,
         )
+
+    def drain_status_reports(self) -> list[tuple[int, list[str]]]:
+        """Return subscribed PLAYVM status reports accumulated since the last read."""
+        reports: list[tuple[int, list[str]]] = []
+        for raw in self.hub.drain_notifications():
+            status = decode_vm_status_report(raw, self.play_vm)
+            if status is not None:
+                reports.append(status)
+        return reports
 
     async def start_play_vm(self) -> tuple[int, int, list[str]]:
         """Link the rears, subscribe to status and calibrate.

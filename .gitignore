@@ -222,3 +222,6 @@ __marimo__/
 config/port_map.json
 tumbler_scheme.txt
 captures/
+
+# IDEA
+.idea

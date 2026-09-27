@@ -1,13 +1,14 @@
+from __future__ import annotations
+
 import argparse
 import asyncio
-from pathlib import Path
 from typing import Any
 
+from bridge.paths import HUB_SCHEME_PATH, PORT_MAP_PATH
 from bridge.port_map import normalize_port_map, save_port_map
 from bridge.transport import DEFAULT_HUB_NAME, TechnicMoveHub
 
-OUTPUT_PATH = Path("hub_scheme.txt")
-PORT_MAP_PATH = Path("config/port_map.json")
+OUTPUT_PATH = HUB_SCHEME_PATH
 
 
 def describe_capabilities(bits: int | None) -> str:
@@ -89,8 +90,8 @@ def build_report(hub: TechnicMoveHub, port_map: dict[str, Any]) -> str:
     lines.append("")
     lines.append("Normalized port map:")
     if port_map["roles"]:
-        for role, role_info in sorted(port_map["roles"].items()):
-            lines.append(f"- {role}: {role_info['port']} ({role_info['confidence']})")
+        for role, port in sorted(port_map["roles"].items()):
+            lines.append(f"- {role}: {port}")
     else:
         lines.append("- No roles inferred")
 

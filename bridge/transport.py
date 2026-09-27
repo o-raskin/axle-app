@@ -1,14 +1,16 @@
+from __future__ import annotations
+
 import asyncio
 import sys
 from collections import deque
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
-from bleak import BleakClient, BleakScanner
+from .platform import configure_process_for_platform
 
-if sys.platform == "win32":
-    sys.coinit_flags = 0  # type: ignore[attr-defined]
+configure_process_for_platform()
 
+from bleak import BleakClient, BleakScanner  # noqa: E402
 
 CHAR_UUID = "00001624-1212-efde-1623-785feabcd123"
 
@@ -149,7 +151,7 @@ class TechnicMoveHub:
         if sys.platform != "win32":
             return
         try:
-            from winrt.windows.devices.bluetooth import (  # noqa: PLC0415  (Windows-only)
+            from winrt.windows.devices.bluetooth import (  # type: ignore[import-not-found]  # noqa: PLC0415
                 BluetoothLEPreferredConnectionParameters as Params,
             )
 

@@ -1,5 +1,7 @@
 """Name the ports a hub reports, so the bridge can find the ones it drives."""
 
+from __future__ import annotations
+
 import json
 from pathlib import Path
 from typing import Any

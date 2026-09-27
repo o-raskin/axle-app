@@ -1,5 +1,7 @@
 """A hub that answers like the real one, so the startup sequence can be tested without hardware."""
 
+from __future__ import annotations
+
 from bridge.transport import (
     ATTACHED_IO_VIRTUAL,
     MSG_ATTACHED_IO,
