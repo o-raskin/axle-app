@@ -101,16 +101,19 @@ then writes a single terminal executable to `dist/lego-technic-gamepad-bridge`.
 
 ## Automated Release Builds
 
-Every push to `master` runs `.github/workflows/release.yml`. The workflow:
+Every push to `main` runs `.github/workflows/release.yml`. It is a three-job pipeline:
 
-- runs ruff, pytest, and mypy;
-- builds the single-file macOS executable with `scripts/build_macos_release.sh`;
-- uploads the binary as a GitHub Actions artifact named `lego-technic-gamepad-bridge-macos-<sha>`;
-- publishes a GitHub prerelease tagged `master-<short-sha>` with the binary attached as
-  `lego-technic-gamepad-bridge-macos`.
+- `lint`: runs ruff, pytest, and mypy;
+- `version`: computes a SemVer version as `0.1.<github-run-number>`;
+- `release`: builds the single-file macOS executable, uploads the Actions artifact, and publishes a
+  GitHub Release.
 
-Manual builds can also be started from the workflow's `workflow_dispatch` trigger. Manual runs upload
-the Actions artifact; release publishing is limited to commits on `master`.
+Release tags use `v0.1.<github-run-number>`. The release asset is named
+`lego-technic-gamepad-bridge-v0.1.<github-run-number>-macos-arm64`, and the release notes include
+the version, commit SHA, branch, workflow run URL, and artifact name.
+
+Manual builds can also be started from the workflow's `workflow_dispatch` trigger. Release publishing
+is limited to runs on `main`.
 
 ## Run From Source
 
