@@ -94,9 +94,10 @@ from bridge.feedback import (
     stop_rumble,
     update_gamepad_led,
 )
+from bridge.hub_probe import save_probe_outputs, scan_hub
 from bridge.lighting import AttackSignal, AutomaticLights
 from bridge.low_level_control import LowLevelControl
-from bridge.paths import PORT_MAP_PATH, REVERSE_BEEP_PATH
+from bridge.paths import HUB_SCHEME_PATH, PORT_MAP_PATH, REVERSE_BEEP_PATH
 from bridge.platform import configure_process_for_platform
 from bridge.port_map import load_port_map, port_id
 from bridge.profiles import GamepadProfile, ModelProfile
@@ -108,6 +109,7 @@ from bridge.session import (
     run_control,
     run_live_session,
     safe_shutdown,
+    scan_port_map_for_drive,
     startup_steps,
     wait_for_dualsense,
     wait_for_gamepad,
@@ -166,7 +168,7 @@ from bridge.settings import (
     SPEED_RUMBLE_STRENGTH,
     STARTUP_RETRY_DELAY_S,
 )
-from bridge.transport import TechnicMoveHub
+from bridge.transport import DEFAULT_HUB_NAME, TechnicMoveHub
 
 __all__ = [
     "ATTACK_SIGNAL_DURATION_S",
@@ -199,6 +201,7 @@ __all__ = [
     "DUALSENSE_AUDIO_DEVICE_HINTS",
     "DUALSENSE_GAMEPAD_HINTS",
     "FRONT_LIGHTS_OFF_DELAY_S",
+    "HUB_SCHEME_PATH",
     "LED_OFF_COLOR",
     "LOOP_INTERVAL_S",
     "NON_DUALSENSE_GAMEPAD_HINTS",
@@ -307,9 +310,13 @@ __all__ = [
     "rumble_speed_change",
     "run_audio_probe",
     "run_control",
+    "run_hub_scan",
     "run_live_session",
     "run_probe",
     "safe_shutdown",
+    "save_probe_outputs",
+    "scan_hub",
+    "scan_port_map_for_drive",
     "sdl_library_candidates",
     "select_dualsense_audio_device",
     "select_dualsense_coreaudio_device",
@@ -328,11 +335,24 @@ __all__ = [
 ]
 
 
+async def run_hub_scan(name: str, address: str | None) -> None:
+    """Scan a Technic Move Hub and save the generated runtime port map."""
+    print(f"Scanning for hub: {address or name}. Press the hub power/connect button now.")
+    port_map, report = await scan_hub(name, address)
+    save_probe_outputs(port_map, report)
+    print(report, end="")
+    print(f"Saved report to {HUB_SCHEME_PATH}")
+    print(f"Saved port map to {PORT_MAP_PATH}")
+
+
 async def main() -> None:
     """Parse CLI arguments and dispatch the requested bridge mode."""
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--arm", action="store_true", help="Live control with hub")
+    parser = argparse.ArgumentParser(
+        description="LEGO Technic gamepad bridge. Run with no arguments to start live control."
+    )
+    parser.add_argument("--arm", action="store_true", help="Live control with hub (default)")
     parser.add_argument("--probe", action="store_true", help="Log gamepad axes/buttons without connecting to the hub")
+    parser.add_argument("--scan-hub", action="store_true", help="Scan the hub and save the car port map")
     parser.add_argument(
         "--audio-devices",
         action="store_true",
@@ -340,10 +360,16 @@ async def main() -> None:
     )
     parser.add_argument("--model", default="tumbler", help="Model profile in config/models/")
     parser.add_argument("--gamepad", default="dualsense", help="Gamepad profile in config/gamepads/")
+    parser.add_argument("--name", default=DEFAULT_HUB_NAME, help="Technic hub name to scan/connect")
+    parser.add_argument("--address", default=None, help="Exact BLE address for a specific Technic hub")
     args = parser.parse_args()
 
     if args.audio_devices:
         run_audio_probe()
+        return
+
+    if args.scan_hub:
+        await run_hub_scan(args.name, args.address)
         return
 
     if args.probe:
@@ -354,11 +380,7 @@ async def main() -> None:
         run_probe(pygame_mod, joystick)
         return
 
-    if not args.arm:
-        parser.print_help()
-        return
-
-    await run_control(args.model, args.gamepad)
+    await run_control(args.model, args.gamepad, args.name, args.address)
 
 
 if __name__ == "__main__":

@@ -28,9 +28,10 @@ from .feedback import (
     drive_rumble_strength,
     update_gamepad_led,
 )
+from .hub_probe import save_probe_outputs, scan_hub
 from .lighting import AttackSignal, AutomaticLights
 from .low_level_control import LowLevelControl
-from .paths import PORT_MAP_PATH
+from .paths import HUB_SCHEME_PATH, PORT_MAP_PATH
 from .platform import release_winrt_sta_for_pygame
 from .port_map import load_port_map, port_id
 from .profiles import GamepadProfile, ModelProfile
@@ -48,7 +49,7 @@ from .settings import (
     SPEED_RUMBLE_DURATION_MS,
     STARTUP_RETRY_DELAY_S,
 )
-from .transport import TechnicMoveHub
+from .transport import DEFAULT_HUB_NAME, TechnicMoveHub
 
 
 @dataclass(frozen=True)
@@ -117,7 +118,7 @@ def load_port_map_for_drive(setup: SetupConsole) -> dict[str, Any] | None:
             "Hub scan required",
             "The bridge needs a generated port map before live driving.",
             startup_steps(dualsense=False, hub=False, ready=False),
-            "Run `python probe_hub.py`, press the hub button when prompted by the scan, then start `--arm` again.",
+            "Start a hub scan, press the hub button when prompted, then live driving can continue.",
         )
         return None
     except ValueError as exc:
@@ -125,7 +126,7 @@ def load_port_map_for_drive(setup: SetupConsole) -> dict[str, Any] | None:
             "Port map is unreadable",
             f"{PORT_MAP_PATH} could not be parsed.",
             startup_steps(dualsense=False, hub=False, ready=False),
-            f"Run `python probe_hub.py` again. Parser detail: {exc}",
+            f"Run a hub scan again. Parser detail: {exc}",
         )
         return None
 
@@ -134,10 +135,55 @@ def load_port_map_for_drive(setup: SetupConsole) -> dict[str, Any] | None:
             "Port map is incomplete",
             f"{PORT_MAP_PATH} does not contain the expected hub and role information.",
             startup_steps(dualsense=False, hub=False, ready=False),
-            "Run `python probe_hub.py` again, then start `--arm` after the scan completes.",
+            "Run a hub scan again so the bridge can learn this car.",
         )
         return None
     return port_map
+
+
+async def scan_port_map_for_drive(
+    setup: SetupConsole,
+    hub_name: str = DEFAULT_HUB_NAME,
+    hub_address: str | None = None,
+) -> dict[str, Any]:
+    """Run the hub scan from the guided startup flow until a port map is saved."""
+    target = hub_address or hub_name
+    detail = f"Looking for hub: {target}"
+    while True:
+        setup.show(
+            "Scan the car",
+            "Press the Technic Move Hub power/connect button now so the bridge can learn this car.",
+            startup_steps(dualsense=False, hub=False, ready=False),
+            detail,
+        )
+        try:
+            port_map, report = await scan_hub(hub_name, hub_address)
+            save_probe_outputs(port_map, report)
+            setup.show(
+                "Hub scan complete",
+                "The car port map has been saved. Live startup can continue.",
+                startup_steps(dualsense=False, hub=True, ready=False),
+                f"Saved port map to {PORT_MAP_PATH}; saved report to {HUB_SCHEME_PATH}",
+            )
+            return port_map
+        except Exception as exc:
+            detail = (
+                f"Still looking for {target}. Press the hub button if the LED is not blinking. "
+                f"Last check: {type(exc).__name__}: {exc}"
+            )
+            await asyncio.sleep(STARTUP_RETRY_DELAY_S)
+
+
+async def prepare_port_map_for_drive(
+    setup: SetupConsole,
+    hub_name: str = DEFAULT_HUB_NAME,
+    hub_address: str | None = None,
+) -> dict[str, Any]:
+    """Load the saved port map, scanning the hub automatically when it is missing or invalid."""
+    port_map = load_port_map_for_drive(setup)
+    if port_map is not None:
+        return port_map
+    return await scan_port_map_for_drive(setup, hub_name, hub_address)
 
 
 def required_hub_port_issue(hub: TechnicMoveHub, port_map: dict[str, Any]) -> str | None:
@@ -146,19 +192,25 @@ def required_hub_port_issue(hub: TechnicMoveHub, port_map: dict[str, Any]) -> st
         try:
             port = port_id(port_map, role)
         except RuntimeError as exc:
-            return f"{exc}. Run `python probe_hub.py` again so the bridge can learn this car."
+            return f"{exc}. Run a hub scan again so the bridge can learn this car."
         if port not in hub.attached_devices:
             return (
                 f"The saved {role} port {port:#04x} was not reported by the hub. "
-                "Check the model, then run `python probe_hub.py` again if the wiring changed."
+                "Check the model, then run a hub scan again if the wiring changed."
             )
     return None
 
 
-async def wait_for_hub(setup: SetupConsole, port_map: dict[str, Any], reconnect: bool = False) -> TechnicMoveHub | None:
+async def wait_for_hub(
+    setup: SetupConsole,
+    port_map: dict[str, Any],
+    reconnect: bool = False,
+    hub_name_override: str | None = None,
+    hub_address_override: str | None = None,
+) -> TechnicMoveHub | None:
     """Wait until the Technic hub is online and matches the saved port map."""
-    hub_name = port_map["hub"]["name"]
-    hub_address = port_map["hub"].get("address")
+    hub_name = hub_name_override or port_map["hub"]["name"]
+    hub_address = hub_address_override or port_map["hub"].get("address")
     target = hub_address or hub_name
     title = "Car disconnected" if reconnect else "Connect the car"
     message = (
@@ -527,7 +579,12 @@ async def run_live_session(
     return reconnect_reason
 
 
-async def run_control(model_name: str, gamepad_name: str) -> None:
+async def run_control(
+    model_name: str,
+    gamepad_name: str,
+    hub_name: str = DEFAULT_HUB_NAME,
+    hub_address: str | None = None,
+) -> None:
     """Run the guided live-control flow for one model and gamepad profile."""
     setup = SetupConsole()
     try:
@@ -542,9 +599,7 @@ async def run_control(model_name: str, gamepad_name: str) -> None:
         )
         return
 
-    port_map = load_port_map_for_drive(setup)
-    if port_map is None:
-        return
+    port_map = await prepare_port_map_for_drive(setup, hub_name, hub_address)
 
     reconnect_reason: str | None = None
     while True:
@@ -553,7 +608,13 @@ async def run_control(model_name: str, gamepad_name: str) -> None:
             pad,
             reconnect=reconnect_reason == RECONNECT_DUALSENSE,
         )
-        hub = await wait_for_hub(setup, port_map, reconnect=reconnect_reason == RECONNECT_HUB)
+        hub = await wait_for_hub(
+            setup,
+            port_map,
+            reconnect=reconnect_reason == RECONNECT_HUB,
+            hub_name_override=hub_name,
+            hub_address_override=hub_address,
+        )
         if hub is None:
             try:
                 pygame_mod.quit()

@@ -1,4 +1,2 @@
 -r requirements-runtime.txt
-pytest
-ruff
-mypy
+pyinstaller>=6,<7

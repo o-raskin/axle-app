@@ -145,7 +145,7 @@ def test_missing_port_map_returns_none_and_explains_next_step(monkeypatch: Any, 
 
     assert setup.calls
     assert setup.calls[-1][0] == "Hub scan required"
-    assert "probe_hub.py" in setup.calls[-1][3]
+    assert "hub scan" in setup.calls[-1][3]
 
 
 def test_coreaudio_helpers_are_noops_off_macos(monkeypatch: Any) -> None:

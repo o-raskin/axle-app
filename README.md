@@ -27,6 +27,7 @@ Highlights:
 | Boost | R1 fires the Tumbler boost for 1.95 seconds, then enforces a 7.5 second cooldown. |
 | Lights | Front lights follow forward motion; reverse blinks rocket lights once per second. |
 | Effects | Circle sends a one-second PLAYVM flicker signal. |
+| Crash lockout | A hub-reported PLAYVM `impact` at 30%+ drive power blocks controls for 3 seconds. |
 | Feedback | DualSense rumble, LED color, LED brightness, reverse audio, and the terminal dashboard mirror the car state. |
 
 Keep the wheels off the ground the first time you run live control. The script asks for an explicit
@@ -35,46 +36,105 @@ Enter press before arming the hub, but once armed it can move the model immediat
 ## Requirements
 
 - macOS
-- Python 3.9+
 - Sony DualSense controller connected to macOS
 - LEGO Technic Move Hub (88019)
 - LEGO Technic 42239 Batmobile Tumbler profile, shipped as `config/models/tumbler.json`
 
-## Setup
+Python 3.9+ is only required when running from source or building a release.
+
+## Start From a Release
+
+Download the `lego-technic-gamepad-bridge-macos` asset from the latest GitHub prerelease, then run:
+
+```bash
+mv lego-technic-gamepad-bridge-macos lego-technic-gamepad-bridge
+chmod +x ./lego-technic-gamepad-bridge
+./lego-technic-gamepad-bridge
+```
+
+If macOS blocks a downloaded unsigned binary, remove the download quarantine and run it again:
+
+```bash
+xattr -dr com.apple.quarantine ./lego-technic-gamepad-bridge
+./lego-technic-gamepad-bridge
+```
+
+The release executable starts the guided live-control flow by default. If this Mac does not have a
+saved car port map yet, the bridge scans the hub first, saves the result, and continues startup. The
+scan does not move the model.
+
+Release runtime files are stored under:
+
+```text
+~/Library/Application Support/LEGO Technic Gamepad Bridge/
+```
+
+Set `LEGO_BRIDGE_HOME=/some/path` before launch to use a different runtime state directory.
+
+Useful release commands:
+
+```bash
+./lego-technic-gamepad-bridge             # guided live control; scans first if needed
+./lego-technic-gamepad-bridge --scan-hub  # refresh the saved hub port map without driving
+./lego-technic-gamepad-bridge --probe     # show DualSense axes/buttons, no hub
+./lego-technic-gamepad-bridge --audio-devices
+```
+
+By default the scan looks for a hub named `Technic Move`. If several hubs are nearby, or if you want
+to reconnect to the exact same hub, pass its BLE address:
+
+```bash
+./lego-technic-gamepad-bridge --scan-hub --address 44:3E:8A:7B:A4:EC
+```
+
+## Build the macOS Release
+
+Local release builds must be created on macOS:
+
+```bash
+scripts/build_macos_release.sh
+./dist/lego-technic-gamepad-bridge
+```
+
+The build script creates a local `.venv-release`, installs PyInstaller and the runtime dependencies,
+then writes a single terminal executable to `dist/lego-technic-gamepad-bridge`.
+
+## Automated Release Builds
+
+Every push to `master` runs `.github/workflows/release.yml`. The workflow:
+
+- runs ruff, pytest, and mypy;
+- builds the single-file macOS executable with `scripts/build_macos_release.sh`;
+- uploads the binary as a GitHub Actions artifact named `lego-technic-gamepad-bridge-macos-<sha>`;
+- publishes a GitHub prerelease tagged `master-<short-sha>` with the binary attached as
+  `lego-technic-gamepad-bridge-macos`.
+
+Manual builds can also be started from the workflow's `workflow_dispatch` trigger. Manual runs upload
+the Actions artifact; release publishing is limited to commits on `master`.
+
+## Run From Source
 
 ```bash
 python3 -m venv lego-env
 source lego-env/bin/activate
 pip install -r requirements.txt
+python gamepad_bridge.py
 ```
 
-## Scan the Hub
-
-Run the probe once before driving. It does not move the model. It writes the runtime port map to
-`config/port_map.json` and a readable topology report to `hub_scheme.txt`.
+Source-mode utility commands mirror the release executable:
 
 ```bash
-python probe_hub.py
+python gamepad_bridge.py --scan-hub
+python gamepad_bridge.py --probe
+python gamepad_bridge.py --audio-devices
 ```
 
-By default the probe scans for a hub named `Technic Move`. If several hubs are nearby, or if you want
-to reconnect to the exact same hub, pass its BLE address:
-
-```bash
-python probe_hub.py --address 44:3E:8A:7B:A4:EC
-```
+The legacy `python probe_hub.py` command is still available for development, but users should not
+need it.
 
 ## Drive
 
-Useful commands:
-
-```bash
-python gamepad_bridge.py --probe          # show DualSense axes/buttons, no hub
-python gamepad_bridge.py --audio-devices  # show reverse-beep outputs
-python gamepad_bridge.py --arm            # live hub control
-```
-
-`--arm` connects to the hub from `config/port_map.json`, starts PLAYVM, waits for calibration, opens
+Live startup connects to the hub from the saved port map, starts PLAYVM, waits for calibration, opens
 the DualSense, and prints each changed command sent to the hub. Press `Ctrl+C` for safe motor stop,
 LED cleanup, BLE disconnect, and pygame shutdown.
 
@@ -86,7 +146,7 @@ available and you confirm the final safety prompt.
 During live control, a cockpit-style terminal panel stays above the event log. It shows a drive-power
 speedometer, steering meter, separate L2/R2 trigger bars, speed-mode selector, live button states,
 boost/cooldown, brake, lights, flicker, controller LED, rumble, reverse beep, and a small car view.
-Set `CAR_DASHBOARD=off` before `--arm` to keep ordinary scrolling logs.
+Set `CAR_DASHBOARD=off` before launch to keep ordinary scrolling logs.
 
 If the DualSense or hub disconnects while driving, the bridge stops the live session, performs safe
 cleanup, and returns to the matching reconnect screen instead of crashing with a traceback.
@@ -116,8 +176,20 @@ cleanup, and returns to the matching reconnect screen instead of crashing with a
 | Reverse after 1 second | `beep.mp3` repeats through the DualSense speaker when macOS exposes it. |
 | Boost active | LED ramps to orange, stays orange during boost, then fades out. Strong rumble follows. |
 | Boost unavailable | LED flashes red for 0.6 seconds and sends a short strong rumble. |
+| Crash lockout | Bright red LED and full-strength rumble for 3 seconds. |
 | Forward motion | Front lights turn on automatically and stay on for one second after stopping. |
 | Reverse motion | Front lights turn off; rocket lights blink once per second. |
+
+## Crash Lockout
+
+Crash lockout is driven by the hub's PLAYVM status, not by normal trigger movement. Releasing R2 or
+L2 after driving, changing speed mode, or pressing L1 brake does not count as a crash.
+
+The bridge starts crash lockout only when the hub reports an `impact` status while the current or
+recent commanded drive power is at least 30% of the model's maximum. When that happens, controls are
+blocked for 3 seconds: throttle and steering are forced to zero, boost/lights/flicker inputs are
+ignored, the DualSense LED turns bright red, and the controller rumbles at full strength. Control is
+restored automatically after the lockout expires.
 
 ## Reverse Beep Audio
 
@@ -127,9 +199,9 @@ system output.
 
 ```bash
 python gamepad_bridge.py --audio-devices
-DUALSENSE_AUDIO_DEVICE="DualSense Wireless Controller" python gamepad_bridge.py --arm
-REVERSE_BEEP_OUTPUT=default python gamepad_bridge.py --arm
-REVERSE_BEEP_OUTPUT=off python gamepad_bridge.py --arm
+DUALSENSE_AUDIO_DEVICE="DualSense Wireless Controller" python gamepad_bridge.py
+REVERSE_BEEP_OUTPUT=default python gamepad_bridge.py
+REVERSE_BEEP_OUTPUT=off python gamepad_bridge.py
 ```
 
 Use `DUALSENSE_AUDIO_DEVICE` when the controller appears under a different output name. Use
@@ -144,7 +216,7 @@ Profiles keep hardware discovery separate from model-specific command meanings:
   drive/steering limits.
 - `config/gamepads/dualsense.json` defines the DualSense button and axis indices, trigger behavior,
   and deadzones.
-- `config/port_map.json` is generated by `probe_hub.py` and tells the bridge which hub ports are
+- The saved `port_map.json` is generated by the hub scan and tells the bridge which hub ports are
   drive, steering, lights, and PLAYVM.
 
 Command bits are model-specific. For example, `0x04` is boost on the Tumbler, but a different model

@@ -1,0 +1,70 @@
+name: Build macOS Release
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  macos-release:
+    name: Build macOS executable
+    runs-on: macos-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.9"
+
+      - name: Install development dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
+      - name: Run checks
+        run: |
+          python -m ruff check .
+          python -m pytest tests -q
+          python -m mypy gamepad_bridge.py probe_hub.py bridge tests
+
+      - name: Build single-file executable
+        run: PYTHON_BIN=python scripts/build_macos_release.sh
+
+      - name: Smoke test executable
+        run: dist/lego-technic-gamepad-bridge --help
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: lego-technic-gamepad-bridge-macos-${{ github.sha }}
+          path: dist/lego-technic-gamepad-bridge
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish commit release
+        if: github.ref == 'refs/heads/master'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          short_sha="${GITHUB_SHA::12}"
+          tag="master-${short_sha}"
+          asset="dist/lego-technic-gamepad-bridge"
+          asset_name="lego-technic-gamepad-bridge-macos"
+
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" "$asset#$asset_name" --clobber
+          else
+            gh release create "$tag" "$asset#$asset_name" \
+              --target "$GITHUB_SHA" \
+              --title "master ${short_sha}" \
+              --notes "Automated macOS build for commit ${GITHUB_SHA}." \
+              --prerelease
+          fi
