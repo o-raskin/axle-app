@@ -60,7 +60,8 @@ chmod +x ./lego-technic-gamepad-bridge-v...-linux-x86_64.AppImage
 ```
 
 The raw Linux binary is useful for terminal debugging, but KDE/Dolphin may ask whether to run it
-with Konsole. The AppImage is the intended double-clickable and Steam-friendly format.
+with Konsole. The AppImage is the intended double-clickable and Steam-friendly format; when launched
+without a terminal, it opens Konsole itself and runs the bridge inside it.
 
 If macOS blocks a downloaded unsigned binary, remove the download quarantine and run it again:
 
@@ -101,7 +102,8 @@ to reconnect to the exact same hub, pass its BLE address:
 ```
 
 On Steam Deck, download the AppImage in Desktop Mode, mark it executable, and add the AppImage to
-Steam as a Non-Steam Game if you want to launch it from Game Mode.
+Steam as a Non-Steam Game if you want to launch it from Game Mode. Directly launching the AppImage
+opens its own Konsole window; do not use Dolphin's raw-binary `Run with Konsole` path for normal use.
 
 ## Build Release Binaries
 

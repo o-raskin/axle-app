@@ -42,7 +42,37 @@ cat > "$APPDIR/AppRun" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 HERE="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
-exec "$HERE/usr/bin/lego-technic-gamepad-bridge" "$@"
+BINARY="$HERE/usr/bin/lego-technic-gamepad-bridge"
+
+if [[ "${LEGO_BRIDGE_NO_TERMINAL_LAUNCH:-0}" == "1" || "${LEGO_BRIDGE_IN_TERMINAL:-0}" == "1" ]]; then
+  exec "$BINARY" "$@"
+fi
+
+for arg in "$@"; do
+  case "$arg" in
+    -h|--help)
+      exec "$BINARY" "$@"
+      ;;
+  esac
+done
+
+if [[ -t 0 && -t 1 ]]; then
+  exec "$BINARY" "$@"
+fi
+
+if command -v konsole >/dev/null 2>&1; then
+  exec konsole --workdir "$HOME" -e env LEGO_BRIDGE_IN_TERMINAL=1 "$BINARY" "$@"
+fi
+
+if command -v x-terminal-emulator >/dev/null 2>&1; then
+  exec x-terminal-emulator -e env LEGO_BRIDGE_IN_TERMINAL=1 "$BINARY" "$@"
+fi
+
+if command -v xterm >/dev/null 2>&1; then
+  exec xterm -e env LEGO_BRIDGE_IN_TERMINAL=1 "$BINARY" "$@"
+fi
+
+exec "$BINARY" "$@"
 EOF
 chmod +x "$APPDIR/AppRun"
 
