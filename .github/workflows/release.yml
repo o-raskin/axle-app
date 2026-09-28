@@ -159,6 +159,7 @@ jobs:
       - name: Publish GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
           VERSION: ${{ needs.version.outputs.version }}
           TAG: ${{ needs.version.outputs.tag }}
           MACOS_ASSET_NAME: ${{ needs.version.outputs.macos_asset_name }}
@@ -168,6 +169,8 @@ jobs:
           macos_asset="release/${MACOS_ASSET_NAME}"
           linux_asset="release/${LINUX_ASSET_NAME}"
           run_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          test -f "$macos_asset"
+          test -f "$linux_asset"
 
           cat > release-notes.md <<EOF
           Automated macOS and Linux x86_64 builds.
