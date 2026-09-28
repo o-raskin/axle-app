@@ -37,6 +37,7 @@ python -m PyInstaller \
   --add-data "$ROOT_DIR/beep.mp3:." \
   --collect-all bleak \
   --hidden-import pygame._sdl2.audio \
+  --hidden-import pygame._sdl2.controller \
   --hidden-import pygame._sdl2.sdl2 \
   gamepad_bridge.py
 

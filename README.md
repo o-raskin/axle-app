@@ -89,6 +89,7 @@ Useful release commands:
 ./lego-technic-gamepad-bridge             # guided live control; scans first if needed
 ./lego-technic-gamepad-bridge --scan-hub  # refresh the saved hub port map without driving
 ./lego-technic-gamepad-bridge --probe     # show gamepad axes/buttons, no hub
+./lego-technic-gamepad-bridge --gamepad-devices
 ./lego-technic-gamepad-bridge --audio-devices
 ./lego-technic-gamepad-bridge --gamepad dualsense
 ./lego-technic-gamepad-bridge --gamepad steamdeck
@@ -104,6 +105,22 @@ to reconnect to the exact same hub, pass its BLE address:
 On Steam Deck, download the AppImage in Desktop Mode, mark it executable, and add the AppImage to
 Steam as a Non-Steam Game if you want to launch it from Game Mode. Directly launching the AppImage
 opens its own Konsole window; do not use Dolphin's raw-binary `Run with Konsole` path for normal use.
+
+If startup remains stuck on `Gamepad controller detected`, run:
+
+```bash
+./lego-technic-gamepad-bridge-v...-linux-x86_64.AppImage --gamepad-devices
+```
+
+On Steam Deck, the best report has a `controller_count` greater than zero and at least one
+`controller[N].is_controller=True` line for `Steam Virtual Gamepad`, `Steam Deck`, or an Xbox-style
+name. The bridge uses SDL's GameController path first because Steam Input and the Deck's built-in
+controller are mapped there consistently; `joystick_count=0` is acceptable if the controller lines
+are present. If both `controller_count=0` and `joystick_count=0`, the app is not being launched with
+a gamepad-visible Steam Input path; add the AppImage to Steam and run it from Steam with a gamepad
+layout, or switch Desktop Mode controls into gamepad mode before launching. If SDL reports a
+controller name that does not match any profile, send the full report and add/update a profile for
+the reported name.
 
 ## Build Release Binaries
 

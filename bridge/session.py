@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from contextlib import suppress
 from dataclasses import dataclass
 from typing import Any
 
@@ -63,6 +64,27 @@ class ConnectedHardware:
     joystick: Any
 
 
+@dataclass(frozen=True)
+class GamepadConnection:
+    """A matched gamepad profile and its open pygame handles."""
+
+    pygame_mod: Any
+    joystick: Any
+    profile: GamepadProfile
+
+
+@dataclass(frozen=True)
+class HubTarget:
+    """Optional command-line hub target overrides."""
+
+    name: str | None = None
+    address: str | None = None
+
+
+class HubPortMismatch(RuntimeError):
+    """Raised when a reachable hub does not match the saved car port map."""
+
+
 def startup_steps(dualsense: bool, hub: bool, ready: bool, bluetooth: bool = True) -> list[tuple[str, bool]]:
     """Checklist shared by startup panels."""
     return [
@@ -71,6 +93,17 @@ def startup_steps(dualsense: bool, hub: bool, ready: bool, bluetooth: bool = Tru
         ("Technic Move Hub connected", hub),
         ("Live drive session ready", ready),
     ]
+
+
+def try_init_gamepad_candidates(profiles: list[GamepadProfile]) -> tuple[GamepadConnection | None, str]:
+    """Try all allowed gamepad profiles once, returning either a match or combined diagnostics."""
+    issues = []
+    for profile in profiles:
+        pygame_mod, joystick, issue = try_init_gamepad(profile)
+        if pygame_mod is not None and joystick is not None:
+            return GamepadConnection(pygame_mod, joystick, profile), ""
+        issues.append(f"{profile.name}: {issue}")
+    return None, "; ".join(issues)
 
 
 async def wait_for_gamepad(
@@ -88,19 +121,16 @@ async def wait_for_gamepad(
     )
     detail = "macOS, SteamOS, and Windows may expose the same controller under different names."
     while True:
-        issues = []
-        for profile in profiles:
-            pygame_mod, joystick, issue = try_init_gamepad(profile)
-            if pygame_mod is not None and joystick is not None:
-                setup.show(
-                    "Controller ready",
-                    f"Controller detected: {joystick.get_name()} ({profile.name})",
-                    startup_steps(dualsense=True, hub=False, ready=False),
-                )
-                return pygame_mod, joystick, profile
-            issues.append(f"{profile.name}: {issue}")
+        gamepad, issue = try_init_gamepad_candidates(profiles)
+        if gamepad is not None:
+            setup.show(
+                "Controller ready",
+                f"Controller detected: {gamepad.joystick.get_name()} ({gamepad.profile.name})",
+                startup_steps(dualsense=True, hub=False, ready=False),
+            )
+            return gamepad.pygame_mod, gamepad.joystick, gamepad.profile
 
-        issue_detail = f"{detail} Last check: {'; '.join(issues)}" if issues else detail
+        issue_detail = f"{detail} Last check: {issue}" if issue else detail
         setup.show(
             title,
             message,
@@ -229,6 +259,28 @@ def required_hub_port_issue(hub: TechnicMoveHub, port_map: dict[str, Any]) -> st
     return None
 
 
+async def connect_hub_for_drive(
+    port_map: dict[str, Any],
+    hub_name_override: str | None = None,
+    hub_address_override: str | None = None,
+) -> TechnicMoveHub:
+    """Connect and validate one hub attempt against the saved drive port map."""
+    hub_name = hub_name_override or port_map["hub"]["name"]
+    hub_address = hub_address_override or port_map["hub"].get("address")
+    hub = TechnicMoveHub(hub_name=hub_name, hub_address=hub_address)
+    try:
+        await hub.connect()
+        await hub.wait_for_topology()
+        issue = required_hub_port_issue(hub, port_map)
+        if issue is not None:
+            raise HubPortMismatch(issue)
+        return hub
+    except BaseException:
+        with suppress(Exception):
+            await hub.disconnect()
+        raise
+
+
 async def wait_for_hub(
     setup: SetupConsole,
     port_map: dict[str, Any],
@@ -255,37 +307,128 @@ async def wait_for_hub(
             startup_steps(dualsense=True, hub=False, ready=False),
             detail,
         )
-        hub = TechnicMoveHub(hub_name=hub_name, hub_address=hub_address)
         try:
-            await hub.connect()
-            await hub.wait_for_topology()
-            issue = required_hub_port_issue(hub, port_map)
-            if issue is not None:
-                await hub.disconnect()
-                setup.show(
-                    "Hub connected, but this is not ready to drive",
-                    "The bridge connected to a hub, but the expected model ports are missing.",
-                    startup_steps(dualsense=True, hub=True, ready=False),
-                    issue,
-                )
-                return None
-
+            hub = await connect_hub_for_drive(port_map, hub_name, hub_address)
             setup.show(
                 "Car ready",
                 f"Hub connected: {hub.hub_name}. Required ports are online.",
                 startup_steps(dualsense=True, hub=True, ready=True),
             )
             return hub
+        except HubPortMismatch as exc:
+            setup.show(
+                "Hub connected, but this is not ready to drive",
+                "The bridge connected to a hub, but the expected model ports are missing.",
+                startup_steps(dualsense=True, hub=True, ready=False),
+                str(exc),
+            )
+            return None
         except Exception as exc:
-            try:
-                await hub.disconnect()
-            except Exception:
-                pass
             detail = (
                 f"Still looking for {target}. Press the hub button if the LED is not blinking. "
                 f"Last check: {type(exc).__name__}: {exc}"
             )
             await asyncio.sleep(STARTUP_RETRY_DELAY_S)
+
+
+async def wait_for_drive_hardware(
+    setup: SetupConsole,
+    port_map: dict[str, Any],
+    profiles: list[GamepadProfile],
+    reconnect_reason: str | None = None,
+    hub_target: HubTarget | None = None,
+) -> tuple[GamepadProfile, ConnectedHardware] | None:
+    """Connect the gamepad and Technic hub in parallel before arming live control."""
+    controller_name = " / ".join(profile.name for profile in profiles)
+    hub_target = hub_target or HubTarget()
+    hub_name = hub_target.name or port_map["hub"]["name"]
+    hub_address = hub_target.address or port_map["hub"].get("address")
+    target = hub_address or hub_name
+    reconnecting_gamepad = reconnect_reason == RECONNECT_DUALSENSE
+    reconnecting_hub = reconnect_reason == RECONNECT_HUB
+    title = "Reconnect controller and car" if reconnecting_gamepad or reconnecting_hub else "Connect controller and car"
+    message = (
+        f"Reconnect {controller_name} and press the Technic Move Hub button; both are scanned in parallel."
+        if reconnecting_gamepad or reconnecting_hub
+        else f"Connect {controller_name} and press the Technic Move Hub button; both are scanned in parallel."
+    )
+    gamepad_detail = "waiting"
+    hub_detail = f"Looking for hub: {target}"
+    gamepad: GamepadConnection | None = None
+    hub: TechnicMoveHub | None = None
+    hub_task: asyncio.Task[TechnicMoveHub] | None = None
+    handoff_complete = False
+
+    try:
+        while True:
+            if hub is None and hub_task is None:
+                hub_task = asyncio.create_task(connect_hub_for_drive(port_map, hub_name, hub_address))
+                await asyncio.sleep(0)
+
+            if gamepad is None:
+                gamepad, issue = try_init_gamepad_candidates(profiles)
+                if gamepad is not None:
+                    gamepad_detail = f"ready: {gamepad.joystick.get_name()} ({gamepad.profile.name})"
+                elif issue:
+                    gamepad_detail = f"Last check: {issue}"
+
+            if hub_task is not None and hub_task.done():
+                try:
+                    hub = hub_task.result()
+                    hub_detail = f"ready: {hub.hub_name}"
+                except HubPortMismatch as exc:
+                    setup.show(
+                        "Hub connected, but this is not ready to drive",
+                        "The bridge connected to a hub, but the expected model ports are missing.",
+                        startup_steps(dualsense=gamepad is not None, hub=True, ready=False),
+                        str(exc),
+                    )
+                    return None
+                except Exception as exc:
+                    hub_detail = (
+                        f"Still looking for {target}. Press the hub button if the LED is not blinking. "
+                        f"Last check: {type(exc).__name__}: {exc}"
+                    )
+                    hub_task = None
+                else:
+                    hub_task = None
+
+            setup.show(
+                title,
+                message,
+                startup_steps(dualsense=gamepad is not None, hub=hub is not None, ready=False),
+                f"Gamepad: {gamepad_detail} | Hub: {hub_detail}",
+            )
+
+            if gamepad is not None and hub is not None:
+                setup.show(
+                    "Hardware ready",
+                    (
+                        f"Controller detected: {gamepad.joystick.get_name()} ({gamepad.profile.name}); "
+                        f"hub connected: {hub.hub_name}."
+                    ),
+                    startup_steps(dualsense=True, hub=True, ready=True),
+                )
+                handoff_complete = True
+                return gamepad.profile, ConnectedHardware(hub, gamepad.pygame_mod, gamepad.joystick)
+
+            await asyncio.sleep(STARTUP_RETRY_DELAY_S)
+    finally:
+        if hub_task is not None:
+            if not hub_task.done():
+                hub_task.cancel()
+            with suppress(Exception, asyncio.CancelledError):
+                task_hub = await hub_task
+                if not handoff_complete and task_hub is not hub:
+                    with suppress(Exception):
+                        await task_hub.disconnect()
+        if not handoff_complete:
+            if hub is not None:
+                with suppress(Exception):
+                    await hub.disconnect()
+            if gamepad is not None:
+                with suppress(Exception):
+                    gamepad.pygame_mod.quit()
 
 
 async def safe_shutdown(
@@ -538,9 +681,7 @@ async def run_live_session(
                 attack_prev = attack_pressed
 
                 flicker = False if crash_active else attack_signal.is_active(now)
-                front_lights_on, rocket_lights_on = (
-                    (False, False) if crash_active else lights.state_for(throttle, now)
-                )
+                front_lights_on, rocket_lights_on = (False, False) if crash_active else lights.state_for(throttle, now)
 
                 steering = 0
                 if not crash_active:
@@ -639,24 +780,16 @@ async def run_control(
 
     reconnect_reason: str | None = None
     while True:
-        pygame_mod, joystick, pad = await wait_for_gamepad(
-            setup,
-            pad_candidates,
-            reconnect=reconnect_reason == RECONNECT_DUALSENSE,
-        )
-        hub = await wait_for_hub(
+        hardware_result = await wait_for_drive_hardware(
             setup,
             port_map,
-            reconnect=reconnect_reason == RECONNECT_HUB,
-            hub_name_override=hub_name,
-            hub_address_override=hub_address,
+            pad_candidates,
+            reconnect_reason=reconnect_reason,
+            hub_target=HubTarget(hub_name, hub_address),
         )
-        if hub is None:
-            try:
-                pygame_mod.quit()
-            except Exception:
-                pass
+        if hardware_result is None:
             return
+        pad, hardware = hardware_result
 
         setup.show(
             "Starting live control",
@@ -664,6 +797,6 @@ async def run_control(
             startup_steps(dualsense=True, hub=True, ready=True),
         )
         setup.stop()
-        reconnect_reason = await run_live_session(model, pad, port_map, ConnectedHardware(hub, pygame_mod, joystick))
+        reconnect_reason = await run_live_session(model, pad, port_map, hardware)
         if reconnect_reason == SESSION_EXIT:
             return

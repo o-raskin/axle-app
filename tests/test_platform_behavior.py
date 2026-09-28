@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import asyncio
+import os
 import sys
 from pathlib import Path
 from typing import Any, cast
 
-from bridge import audio, bluetooth, controller, session
+from bridge import audio, bluetooth, controller, platform, session
 from bridge.profiles import GamepadProfile, gamepad_profile_candidates
 
 
@@ -108,6 +110,80 @@ class FakePygameForJoystick:
         self.quit_count += 1
 
 
+class FakeSdlControllerBackingJoystick:
+    def get_instance_id(self) -> int:
+        return 77
+
+    def get_guid(self) -> str:
+        return "03000000de280000ff11000000007701"
+
+    def get_power_level(self) -> str:
+        return "wired"
+
+
+class FakeSdlControllerHandle:
+    def __init__(self) -> None:
+        self.axes = {4: 0, 5: 32767}
+        self.buttons = {10: True}
+        self.rumbles: list[tuple[float, float, int]] = []
+
+    def as_joystick(self) -> FakeSdlControllerBackingJoystick:
+        return FakeSdlControllerBackingJoystick()
+
+    def get_axis(self, index: int) -> int:
+        return self.axes.get(index, 0)
+
+    def get_button(self, index: int) -> bool:
+        return self.buttons.get(index, False)
+
+    def attached(self) -> bool:
+        return True
+
+    def get_init(self) -> bool:
+        return True
+
+    def rumble(self, low_frequency: float, high_frequency: float, duration_ms: int) -> bool:
+        self.rumbles.append((low_frequency, high_frequency, duration_ms))
+        return True
+
+    def stop_rumble(self) -> bool:
+        return True
+
+
+class FakeSdlControllerModule:
+    def __init__(self, name: str = "Steam Virtual Gamepad") -> None:
+        self.name = name
+        self.handle = FakeSdlControllerHandle()
+        self.init_count = 0
+        self.quit_count = 0
+        self.opened_indices: list[int] = []
+
+    def get_init(self) -> bool:
+        return self.init_count > self.quit_count
+
+    def init(self) -> None:
+        self.init_count += 1
+
+    def quit(self) -> None:
+        self.quit_count += 1
+
+    def get_count(self) -> int:
+        return 1
+
+    def name_forindex(self, index: int) -> str:
+        assert index == 0
+        return self.name
+
+    def is_controller(self, index: int) -> bool:
+        assert index == 0
+        return True
+
+    def Controller(self, index: int) -> FakeSdlControllerHandle:
+        assert index == 0
+        self.opened_indices.append(index)
+        return self.handle
+
+
 class FakePygameEventItem:
     def __init__(self, event_type: int, button: int | None = None, key: int | None = None) -> None:
         self.type = event_type
@@ -154,6 +230,45 @@ class FakePygameForEvents:
         self.joystick = FakeJoystickModuleForEvents()
 
 
+class FakePygameHandle:
+    def __init__(self) -> None:
+        self.quit_count = 0
+
+    def quit(self) -> None:
+        self.quit_count += 1
+
+
+class FakeNamedJoystick:
+    def __init__(self, name: str = "DualSense Wireless Controller") -> None:
+        self.name = name
+
+    def get_name(self) -> str:
+        return self.name
+
+
+class FakeDriveHub:
+    events: list[str] = []
+    instances: list["FakeDriveHub"] = []
+
+    def __init__(self, hub_name: str = "Technic Move", hub_address: str | None = None) -> None:
+        self.hub_name = hub_name
+        self.hub_address = hub_address
+        self.disconnect_count = 0
+        FakeDriveHub.instances.append(self)
+
+    async def connect(self) -> None:
+        FakeDriveHub.events.append("hub-connect-start")
+        await asyncio.sleep(0.02)
+        FakeDriveHub.events.append("hub-connect-done")
+
+    async def wait_for_topology(self) -> None:
+        FakeDriveHub.events.append("hub-topology")
+
+    async def disconnect(self) -> None:
+        self.disconnect_count += 1
+        FakeDriveHub.events.append("hub-disconnect")
+
+
 def test_gamepad_profile_matches_controller_names_from_data() -> None:
     pad = GamepadProfile.load("dualsense")
 
@@ -168,6 +283,24 @@ def test_gamepad_profile_matches_controller_names_from_data() -> None:
     assert pad.button("boost") == 10
     assert pad.optional_button("exit") == 6
     assert pad.supports_led
+
+
+def test_platform_config_sets_steam_deck_sdl_hints(monkeypatch: Any) -> None:
+    for name in platform.STEAM_DECK_SDL_HINTS:
+        monkeypatch.delenv(name, raising=False)
+
+    platform.configure_process_for_platform()
+
+    for name, value in platform.STEAM_DECK_SDL_HINTS.items():
+        assert os.environ[name] == value
+
+
+def test_platform_config_preserves_explicit_sdl_hints(monkeypatch: Any) -> None:
+    monkeypatch.setenv("SDL_JOYSTICK_HIDAPI_STEAMDECK", "0")
+
+    platform.configure_process_for_platform()
+
+    assert os.environ["SDL_JOYSTICK_HIDAPI_STEAMDECK"] == "0"
 
 
 def test_steam_deck_profile_matches_steam_input_names() -> None:
@@ -207,6 +340,28 @@ def test_generic_sdl_profile_opens_unknown_single_controller(monkeypatch: Any) -
     assert pygame_mod is fake_pygame
     assert joystick is fake_pygame.joystick.device
     assert issue is None
+
+
+def test_steam_deck_opens_sdl_game_controller_when_raw_joystick_count_is_zero(monkeypatch: Any) -> None:
+    fake_pygame = FakePygameForJoystick([0], "unused")
+    fake_sdl_controller = FakeSdlControllerModule()
+    monkeypatch.setitem(sys.modules, "pygame", fake_pygame)
+    monkeypatch.setattr(controller, "sdl2_controller_module", lambda _pygame_mod: fake_sdl_controller)
+    pad = GamepadProfile.load("steamdeck")
+
+    pygame_mod, joystick, issue = controller.try_init_gamepad(pad)
+
+    assert pygame_mod is fake_pygame
+    assert issue is None
+    assert joystick is not None
+    assert joystick.get_name() == "Steam Virtual Gamepad"
+    assert joystick.get_numaxes() == 6
+    assert joystick.get_numbuttons() >= pad.button("speed_down") + 1
+    assert joystick.get_axis(pad.axis("throttle_reverse")) == -1.0
+    assert joystick.get_axis(pad.axis("throttle_forward")) == 1.0
+    assert joystick.get_button(pad.button("boost")) == 1
+    assert joystick.get_instance_id() == 77
+    assert fake_sdl_controller.opened_indices == [0]
 
 
 def test_start_button_requests_safe_exit() -> None:
@@ -285,6 +440,43 @@ def test_missing_port_map_returns_none_and_explains_next_step(monkeypatch: Any, 
     assert setup.calls
     assert setup.calls[-1][0] == "Hub scan required"
     assert "hub scan" in setup.calls[-1][3]
+
+
+def test_drive_hardware_wait_scans_hub_while_gamepad_is_missing(monkeypatch: Any) -> None:
+    setup = SetupRecorder()
+    pad = GamepadProfile.load("dualsense")
+    pygame = FakePygameHandle()
+    joystick = FakeNamedJoystick()
+    gamepad_attempts = 0
+    port_map = {"hub": {"name": "Technic Move", "address": None}, "roles": {}}
+    FakeDriveHub.events = []
+    FakeDriveHub.instances = []
+
+    def fake_try_init_gamepad_candidates(
+        profiles: list[GamepadProfile],
+    ) -> tuple[session.GamepadConnection | None, str]:
+        nonlocal gamepad_attempts
+        gamepad_attempts += 1
+        if gamepad_attempts == 1:
+            FakeDriveHub.events.append("gamepad-missing")
+            return None, "No gamepad detected"
+        FakeDriveHub.events.append("gamepad-ready")
+        return session.GamepadConnection(pygame, joystick, profiles[0]), ""
+
+    monkeypatch.setattr(session, "STARTUP_RETRY_DELAY_S", 0.01)
+    monkeypatch.setattr(session, "TechnicMoveHub", FakeDriveHub)
+    monkeypatch.setattr(session, "required_hub_port_issue", lambda _hub, _port_map: None)
+    monkeypatch.setattr(session, "try_init_gamepad_candidates", fake_try_init_gamepad_candidates)
+
+    result = asyncio.run(session.wait_for_drive_hardware(cast(Any, setup), port_map, [pad]))
+
+    assert result is not None
+    connected_pad, hardware = result
+    assert connected_pad is pad
+    assert hardware.hub is FakeDriveHub.instances[0]
+    assert FakeDriveHub.events.index("hub-connect-start") < FakeDriveHub.events.index("gamepad-ready")
+    assert gamepad_attempts >= 2
+    assert pygame.quit_count == 0
 
 
 def test_coreaudio_helpers_are_noops_off_macos(monkeypatch: Any) -> None:
