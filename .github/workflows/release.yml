@@ -47,6 +47,7 @@ jobs:
       tag: ${{ steps.semver.outputs.tag }}
       macos_asset_name: ${{ steps.semver.outputs.macos_asset_name }}
       linux_asset_name: ${{ steps.semver.outputs.linux_asset_name }}
+      linux_appimage_asset_name: ${{ steps.semver.outputs.linux_appimage_asset_name }}
 
     steps:
       - name: Compute version
@@ -57,16 +58,19 @@ jobs:
           tag="v${version}"
           macos_asset_name="lego-technic-gamepad-bridge-${tag}-macos-arm64"
           linux_asset_name="lego-technic-gamepad-bridge-${tag}-linux-x86_64"
+          linux_appimage_asset_name="lego-technic-gamepad-bridge-${tag}-linux-x86_64.AppImage"
 
           echo "version=${version}" >> "$GITHUB_OUTPUT"
           echo "tag=${tag}" >> "$GITHUB_OUTPUT"
           echo "macos_asset_name=${macos_asset_name}" >> "$GITHUB_OUTPUT"
           echo "linux_asset_name=${linux_asset_name}" >> "$GITHUB_OUTPUT"
+          echo "linux_appimage_asset_name=${linux_appimage_asset_name}" >> "$GITHUB_OUTPUT"
 
           echo "Version: ${version}"
           echo "Tag: ${tag}"
           echo "macOS asset: ${macos_asset_name}"
           echo "Linux asset: ${linux_asset_name}"
+          echo "Linux AppImage asset: ${linux_appimage_asset_name}"
 
   build_macos_release:
     name: Build macOS release
@@ -127,18 +131,40 @@ jobs:
       - name: Smoke test executable
         run: dist/lego-technic-gamepad-bridge --help
 
+      - name: Download AppImage tooling
+        run: |
+          set -euo pipefail
+          curl -fsSL \
+            https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage \
+            -o appimagetool-x86_64.AppImage
+          chmod +x appimagetool-x86_64.AppImage
+
+      - name: Build AppImage
+        run: |
+          APPIMAGE_SKIP_BINARY_BUILD=1 \
+          APPIMAGETOOL="$PWD/appimagetool-x86_64.AppImage" \
+          APPIMAGE_OUTPUT="$PWD/dist/lego-technic-gamepad-bridge.AppImage" \
+          bash scripts/build_linux_appimage.sh
+
+      - name: Smoke test AppImage
+        run: APPIMAGE_EXTRACT_AND_RUN=1 dist/lego-technic-gamepad-bridge.AppImage --help
+
       - name: Stage release asset
         run: |
           set -euo pipefail
           mkdir -p release
           cp dist/lego-technic-gamepad-bridge "release/${{ needs.version.outputs.linux_asset_name }}"
+          cp dist/lego-technic-gamepad-bridge.AppImage "release/${{ needs.version.outputs.linux_appimage_asset_name }}"
           chmod +x "release/${{ needs.version.outputs.linux_asset_name }}"
+          chmod +x "release/${{ needs.version.outputs.linux_appimage_asset_name }}"
 
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ needs.version.outputs.linux_asset_name }}
-          path: release/${{ needs.version.outputs.linux_asset_name }}
+          name: linux-x86_64-release
+          path: |
+            release/${{ needs.version.outputs.linux_asset_name }}
+            release/${{ needs.version.outputs.linux_appimage_asset_name }}
           if-no-files-found: error
           retention-days: 30
 
@@ -164,13 +190,16 @@ jobs:
           TAG: ${{ needs.version.outputs.tag }}
           MACOS_ASSET_NAME: ${{ needs.version.outputs.macos_asset_name }}
           LINUX_ASSET_NAME: ${{ needs.version.outputs.linux_asset_name }}
+          LINUX_APPIMAGE_ASSET_NAME: ${{ needs.version.outputs.linux_appimage_asset_name }}
         run: |
           set -euo pipefail
           macos_asset="release/${MACOS_ASSET_NAME}"
           linux_asset="release/${LINUX_ASSET_NAME}"
+          linux_appimage_asset="release/${LINUX_APPIMAGE_ASSET_NAME}"
           run_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
           test -f "$macos_asset"
           test -f "$linux_asset"
+          test -f "$linux_appimage_asset"
 
           cat > release-notes.md <<EOF
           Automated macOS and Linux x86_64 builds.
@@ -182,13 +211,21 @@ jobs:
           Artifacts:
           - ${MACOS_ASSET_NAME}
           - ${LINUX_ASSET_NAME}
+          - ${LINUX_APPIMAGE_ASSET_NAME}
           EOF
 
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" "$macos_asset#$MACOS_ASSET_NAME" "$linux_asset#$LINUX_ASSET_NAME" --clobber
+            gh release upload "$TAG" \
+              "$macos_asset#$MACOS_ASSET_NAME" \
+              "$linux_asset#$LINUX_ASSET_NAME" \
+              "$linux_appimage_asset#$LINUX_APPIMAGE_ASSET_NAME" \
+              --clobber
             gh release edit "$TAG" --title "$TAG" --notes-file release-notes.md
           else
-            gh release create "$TAG" "$macos_asset#$MACOS_ASSET_NAME" "$linux_asset#$LINUX_ASSET_NAME" \
+            gh release create "$TAG" \
+              "$macos_asset#$MACOS_ASSET_NAME" \
+              "$linux_asset#$LINUX_ASSET_NAME" \
+              "$linux_appimage_asset#$LINUX_APPIMAGE_ASSET_NAME" \
               --target "$GITHUB_SHA" \
               --title "$TAG" \
               --notes-file release-notes.md

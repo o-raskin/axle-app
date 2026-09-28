@@ -6,8 +6,10 @@ steering, braking, boost, automatic lights, controller LEDs, haptics, and a reve
 
 > Current scope: macOS + DualSense, and Linux/Steam Deck + Steam Input/Xbox-style controller
 > mappings. The shipped profiles are `config/gamepads/dualsense.json`,
-> `config/gamepads/steamdeck.json`, and `config/models/tumbler.json`. The CLI defaults to
-> `--gamepad auto`, trying DualSense first and then the Steam Deck profile.
+> `config/gamepads/steamdeck.json`, `config/gamepads/generic_sdl.json`, and
+> `config/models/tumbler.json`. The CLI defaults to `--gamepad auto`, trying DualSense first, then
+> the Steam Deck profile, then a generic SDL/XInput fallback for Steam Deck names SDL reports
+> differently.
 
 ## What It Does
 
@@ -47,15 +49,18 @@ Python 3.9+ is only required when running from source or building a release.
 Download the matching asset from the latest GitHub prerelease:
 
 - macOS Apple Silicon: `lego-technic-gamepad-bridge-v...-macos-arm64`
-- Steam Deck/Linux x86_64: `lego-technic-gamepad-bridge-v...-linux-x86_64`
+- Steam Deck/Linux x86_64 AppImage: `lego-technic-gamepad-bridge-v...-linux-x86_64.AppImage`
+- Steam Deck/Linux x86_64 raw terminal binary: `lego-technic-gamepad-bridge-v...-linux-x86_64`
 
-Then run:
+On Steam Deck, use the AppImage for normal launching:
 
 ```bash
-mv lego-technic-gamepad-bridge-v...-linux-x86_64 lego-technic-gamepad-bridge
-chmod +x ./lego-technic-gamepad-bridge
-./lego-technic-gamepad-bridge
+chmod +x ./lego-technic-gamepad-bridge-v...-linux-x86_64.AppImage
+./lego-technic-gamepad-bridge-v...-linux-x86_64.AppImage
 ```
+
+The raw Linux binary is useful for terminal debugging, but KDE/Dolphin may ask whether to run it
+with Konsole. The AppImage is the intended double-clickable and Steam-friendly format.
 
 If macOS blocks a downloaded unsigned binary, remove the download quarantine and run it again:
 
@@ -95,8 +100,8 @@ to reconnect to the exact same hub, pass its BLE address:
 ./lego-technic-gamepad-bridge --scan-hub --address 44:3E:8A:7B:A4:EC
 ```
 
-On Steam Deck, download the Linux x86_64 asset in Desktop Mode, mark it executable, and add the
-executable to Steam as a Non-Steam Game if you want to launch it from Game Mode.
+On Steam Deck, download the AppImage in Desktop Mode, mark it executable, and add the AppImage to
+Steam as a Non-Steam Game if you want to launch it from Game Mode.
 
 ## Build Release Binaries
 
@@ -105,12 +110,16 @@ Build the matching release target on its native OS:
 ```bash
 scripts/build_macos_release.sh
 bash scripts/build_linux_release.sh
+bash scripts/build_linux_appimage.sh
 ./dist/lego-technic-gamepad-bridge
+./dist/lego-technic-gamepad-bridge.AppImage
 ```
 
 The macOS build script must run on macOS. The Linux script must run on x86_64 Linux. Each script
 creates a local release virtualenv, installs PyInstaller and the runtime dependencies, then writes a
-single terminal executable to `dist/lego-technic-gamepad-bridge`.
+single terminal executable to `dist/lego-technic-gamepad-bridge`. The AppImage script wraps that
+Linux executable into `dist/lego-technic-gamepad-bridge.AppImage`; set `APPIMAGETOOL=/path/to/appimagetool`
+when building locally.
 
 ## Automated Release Builds
 
@@ -124,7 +133,8 @@ Every push to `main` runs `.github/workflows/release.yml`. It is a multi-job pip
 
 Release tags use `v0.1.<github-run-number>`. The release assets are named
 `lego-technic-gamepad-bridge-v0.1.<github-run-number>-macos-arm64` and
-`lego-technic-gamepad-bridge-v0.1.<github-run-number>-linux-x86_64`.
+`lego-technic-gamepad-bridge-v0.1.<github-run-number>-linux-x86_64`; Steam Deck releases also include
+`lego-technic-gamepad-bridge-v0.1.<github-run-number>-linux-x86_64.AppImage`.
 
 Manual builds can also be started from the workflow's `workflow_dispatch` trigger. Release publishing
 is limited to runs on `main`.
@@ -157,10 +167,10 @@ calibration, opens the selected gamepad, and prints each changed command sent to
 disconnect, and pygame shutdown.
 
 Startup is guided. The bridge first confirms Bluetooth is enabled, then waits for a supported
-gamepad. On Steam Deck, the built-in Steam Input controller should be detected by the `steamdeck`
-profile through `--gamepad auto`. Then it waits for the car and asks you to press the Technic Move
-Hub power/connect button so the hub starts advertising. When the checklist is complete, live control
-starts automatically.
+gamepad. On Steam Deck, the built-in Steam Input controller should be detected by `--gamepad auto`;
+if SDL reports an unexpected controller name, the generic SDL fallback is used. Then it waits for the
+car and asks you to press the Technic Move Hub power/connect button so the hub starts advertising.
+When the checklist is complete, live control starts automatically.
 
 During live control, a cockpit-style terminal panel stays above the event log. It shows a drive-power
 speedometer, steering meter, separate L2/R2 trigger bars, speed-mode selector, live button states,
@@ -253,6 +263,8 @@ Profiles keep hardware discovery separate from model-specific command meanings:
   deadzones, safe-exit button, and LED support.
 - `config/gamepads/steamdeck.json` defines the Steam Deck/Steam Input SDL mapping and keeps LED
   support disabled.
+- `config/gamepads/generic_sdl.json` uses the same SDL/XInput mapping without name filtering. It is
+  the final `--gamepad auto` fallback for devices whose SDL name is unknown.
 - The saved `port_map.json` is generated by the hub scan and tells the bridge which hub ports are
   drive, steering, lights, and PLAYVM.
 

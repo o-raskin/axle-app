@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any, cast
 
 from bridge import audio, bluetooth, controller, session
-from bridge.profiles import GamepadProfile
+from bridge.profiles import GamepadProfile, gamepad_profile_candidates
 
 
 class SetupRecorder:
@@ -183,6 +183,30 @@ def test_steam_deck_profile_matches_steam_input_names() -> None:
     assert pad.button("boost") == 10
     assert pad.optional_button("exit") == 6
     assert not pad.supports_led
+
+
+def test_auto_gamepad_candidates_end_with_generic_sdl_fallback() -> None:
+    candidates = gamepad_profile_candidates("auto")
+
+    assert [candidate.name for candidate in candidates] == [
+        "Sony DualSense",
+        "Steam Deck / SDL Gamepad",
+        "Generic SDL/XInput Gamepad",
+    ]
+    assert candidates[-1].matches_device_name("Unexpected SDL Controller Name")
+    assert not candidates[-1].supports_led
+
+
+def test_generic_sdl_profile_opens_unknown_single_controller(monkeypatch: Any) -> None:
+    fake_pygame = FakePygameForJoystick([1], "Valve Software Steam Controller")
+    monkeypatch.setitem(sys.modules, "pygame", fake_pygame)
+    pad = GamepadProfile.load("generic_sdl")
+
+    pygame_mod, joystick, issue = controller.try_init_gamepad(pad)
+
+    assert pygame_mod is fake_pygame
+    assert joystick is fake_pygame.joystick.device
+    assert issue is None
 
 
 def test_start_button_requests_safe_exit() -> None:

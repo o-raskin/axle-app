@@ -16,7 +16,7 @@ from . import paths
 CONFIG_DIR = paths.CONFIG_DIR
 PORT_MAP_PATH = paths.PORT_MAP_PATH
 AUTO_GAMEPAD_PROFILE = "auto"
-AUTO_GAMEPAD_CANDIDATES = ("dualsense", "steamdeck")
+AUTO_GAMEPAD_CANDIDATES = ("dualsense", "steamdeck", "generic_sdl")
 
 
 def _need(mapping: dict[str, Any], key: str, owner: str, what: str) -> Any:
