@@ -1,18 +1,18 @@
-# LEGO Technic DualSense Bridge for macOS
+# LEGO Technic Gamepad Bridge
 
-Turn a Sony DualSense controller into a tactile cockpit for a LEGO Technic Move Hub (88019).
+Turn a Sony DualSense or Steam Deck controller into a tactile cockpit for a LEGO Technic Move Hub (88019).
 The current implementation is tuned for the LEGO Technic 42239 Batmobile Tumbler: analog drive,
 steering, braking, boost, automatic lights, controller LEDs, haptics, and a reverse warning beep.
 
-> Current scope: macOS + DualSense + LEGO Technic Move Hub. The only shipped profiles are
-> `config/gamepads/dualsense.json` and `config/models/tumbler.json`. The CLI still accepts
-> `--gamepad` and `--model` for profile work, but the controls below describe the current
-> DualSense-only implementation.
+> Current scope: macOS + DualSense, and Linux/Steam Deck + Steam Input/Xbox-style controller
+> mappings. The shipped profiles are `config/gamepads/dualsense.json`,
+> `config/gamepads/steamdeck.json`, and `config/models/tumbler.json`. The CLI defaults to
+> `--gamepad auto`, trying DualSense first and then the Steam Deck profile.
 
 ## What It Does
 
 This bridge connects to the Technic Move Hub over BLE, starts the hub's built-in PLAYVM control
-program, calibrates the model, then sends live drive frames from the DualSense at a 20 Hz control
+program, calibrates the model, then sends live drive frames from the gamepad at a 20 Hz control
 loop. It only sends a new frame when the command state changes, and it performs a safe stop on
 interrupts, disconnects, or normal exit.
 
@@ -28,15 +28,15 @@ Highlights:
 | Lights | Front lights follow forward motion; reverse blinks rocket lights once per second. |
 | Effects | Circle sends a one-second PLAYVM flicker signal. |
 | Crash lockout | A hub-reported PLAYVM `impact` at 30%+ drive power blocks controls for 3 seconds. |
-| Feedback | DualSense rumble, LED color, LED brightness, reverse audio, and the terminal dashboard mirror the car state. |
+| Feedback | Rumble, DualSense LED color/brightness when available, reverse audio, and the terminal dashboard mirror the car state. |
 
-Keep the wheels off the ground the first time you run live control. The script asks for an explicit
-Enter press before arming the hub, but once armed it can move the model immediately.
+Keep the wheels off the ground the first time you run live control. Once Bluetooth, the gamepad, and
+the hub are ready, live control starts automatically and can move the model immediately.
 
 ## Requirements
 
-- macOS
-- Sony DualSense controller connected to macOS
+- macOS with a Sony DualSense controller, or Steam Deck/Linux x86_64 with Steam Input/Xbox-style controls
+- Bluetooth enabled
 - LEGO Technic Move Hub (88019)
 - LEGO Technic 42239 Batmobile Tumbler profile, shipped as `config/models/tumbler.json`
 
@@ -44,10 +44,15 @@ Python 3.9+ is only required when running from source or building a release.
 
 ## Start From a Release
 
-Download the `lego-technic-gamepad-bridge-macos` asset from the latest GitHub prerelease, then run:
+Download the matching asset from the latest GitHub prerelease:
+
+- macOS Apple Silicon: `lego-technic-gamepad-bridge-v...-macos-arm64`
+- Steam Deck/Linux x86_64: `lego-technic-gamepad-bridge-v...-linux-x86_64`
+
+Then run:
 
 ```bash
-mv lego-technic-gamepad-bridge-macos lego-technic-gamepad-bridge
+mv lego-technic-gamepad-bridge-v...-linux-x86_64 lego-technic-gamepad-bridge
 chmod +x ./lego-technic-gamepad-bridge
 ./lego-technic-gamepad-bridge
 ```
@@ -59,14 +64,15 @@ xattr -dr com.apple.quarantine ./lego-technic-gamepad-bridge
 ./lego-technic-gamepad-bridge
 ```
 
-The release executable starts the guided live-control flow by default. If this Mac does not have a
-saved car port map yet, the bridge scans the hub first, saves the result, and continues startup. The
-scan does not move the model.
+The release executable starts the guided live-control flow by default. If this machine does not have
+a saved car port map yet, the bridge scans the hub first, saves the result, and continues startup.
+The scan does not move the model.
 
 Release runtime files are stored under:
 
 ```text
 ~/Library/Application Support/LEGO Technic Gamepad Bridge/
+~/.lego-technic-gamepad-bridge/
 ```
 
 Set `LEGO_BRIDGE_HOME=/some/path` before launch to use a different runtime state directory.
@@ -76,8 +82,10 @@ Useful release commands:
 ```bash
 ./lego-technic-gamepad-bridge             # guided live control; scans first if needed
 ./lego-technic-gamepad-bridge --scan-hub  # refresh the saved hub port map without driving
-./lego-technic-gamepad-bridge --probe     # show DualSense axes/buttons, no hub
+./lego-technic-gamepad-bridge --probe     # show gamepad axes/buttons, no hub
 ./lego-technic-gamepad-bridge --audio-devices
+./lego-technic-gamepad-bridge --gamepad dualsense
+./lego-technic-gamepad-bridge --gamepad steamdeck
 ```
 
 By default the scan looks for a hub named `Technic Move`. If several hubs are nearby, or if you want
@@ -87,30 +95,36 @@ to reconnect to the exact same hub, pass its BLE address:
 ./lego-technic-gamepad-bridge --scan-hub --address 44:3E:8A:7B:A4:EC
 ```
 
-## Build the macOS Release
+On Steam Deck, download the Linux x86_64 asset in Desktop Mode, mark it executable, and add the
+executable to Steam as a Non-Steam Game if you want to launch it from Game Mode.
 
-Local release builds must be created on macOS:
+## Build Release Binaries
+
+Build the matching release target on its native OS:
 
 ```bash
 scripts/build_macos_release.sh
+bash scripts/build_linux_release.sh
 ./dist/lego-technic-gamepad-bridge
 ```
 
-The build script creates a local `.venv-release`, installs PyInstaller and the runtime dependencies,
-then writes a single terminal executable to `dist/lego-technic-gamepad-bridge`.
+The macOS build script must run on macOS. The Linux script must run on x86_64 Linux. Each script
+creates a local release virtualenv, installs PyInstaller and the runtime dependencies, then writes a
+single terminal executable to `dist/lego-technic-gamepad-bridge`.
 
 ## Automated Release Builds
 
-Every push to `main` runs `.github/workflows/release.yml`. It is a three-job pipeline:
+Every push to `main` runs `.github/workflows/release.yml`. It is a multi-job pipeline:
 
 - `lint`: runs ruff, pytest, and mypy;
 - `version`: computes a SemVer version as `0.1.<github-run-number>`;
-- `release`: builds the single-file macOS executable, uploads the Actions artifact, and publishes a
-  GitHub Release.
+- `build_macos_release`: builds the single-file macOS executable;
+- `build_linux_release`: builds the single-file Linux x86_64 executable;
+- `publish_release`: uploads both assets and publishes a GitHub Release.
 
-Release tags use `v0.1.<github-run-number>`. The release asset is named
-`lego-technic-gamepad-bridge-v0.1.<github-run-number>-macos-arm64`, and the release notes include
-the version, commit SHA, branch, workflow run URL, and artifact name.
+Release tags use `v0.1.<github-run-number>`. The release assets are named
+`lego-technic-gamepad-bridge-v0.1.<github-run-number>-macos-arm64` and
+`lego-technic-gamepad-bridge-v0.1.<github-run-number>-linux-x86_64`.
 
 Manual builds can also be started from the workflow's `workflow_dispatch` trigger. Release publishing
 is limited to runs on `main`.
@@ -137,21 +151,23 @@ need it.
 
 ## Drive
 
-Live startup connects to the hub from the saved port map, starts PLAYVM, waits for calibration, opens
-the DualSense, and prints each changed command sent to the hub. Press `Ctrl+C` for safe motor stop,
-LED cleanup, BLE disconnect, and pygame shutdown.
+Live startup checks Bluetooth, connects to the hub from the saved port map, starts PLAYVM, waits for
+calibration, opens the selected gamepad, and prints each changed command sent to the hub. Press
+`Ctrl+C`, `Esc`, or the controller Start/Menu button for safe motor stop, LED cleanup, BLE
+disconnect, and pygame shutdown.
 
-Startup is guided. The bridge first waits for a DualSense and tells you to connect it by USB or
-Bluetooth if it is missing. Then it waits for the car and asks you to press the Technic Move Hub
-power/connect button so the hub starts advertising. Live control is not armed until both sides are
-available and you confirm the final safety prompt.
+Startup is guided. The bridge first confirms Bluetooth is enabled, then waits for a supported
+gamepad. On Steam Deck, the built-in Steam Input controller should be detected by the `steamdeck`
+profile through `--gamepad auto`. Then it waits for the car and asks you to press the Technic Move
+Hub power/connect button so the hub starts advertising. When the checklist is complete, live control
+starts automatically.
 
 During live control, a cockpit-style terminal panel stays above the event log. It shows a drive-power
 speedometer, steering meter, separate L2/R2 trigger bars, speed-mode selector, live button states,
 boost/cooldown, brake, lights, flicker, controller LED, rumble, reverse beep, and a small car view.
 Set `CAR_DASHBOARD=off` before launch to keep ordinary scrolling logs.
 
-If the DualSense or hub disconnects while driving, the bridge stops the live session, performs safe
+If the gamepad or hub disconnects while driving, the bridge stops the live session, performs safe
 cleanup, and returns to the matching reconnect screen instead of crashing with a traceback.
 
 ## DualSense Controls
@@ -167,6 +183,22 @@ cleanup, and returns to the matching reconnect screen instead of crashing with a
 | R1 | Boost, when ready and not braking. |
 | Square | Toggle front lights manually when stopped. Forward and reverse motion override it. |
 | Circle | Trigger the one-second flicker/attack signal. |
+| Options / Esc | Safe exit. |
+
+## Steam Deck Controls
+
+| Control | Action |
+| --- | --- |
+| Left stick X | Steer left/right. |
+| RT | Forward throttle. |
+| LT | Reverse throttle. |
+| D-pad Up | Increase speed mode: 25% -> 50% -> 100%. |
+| D-pad Down | Decrease speed mode: 100% -> 50% -> 25%. |
+| LB | Brake; throttle is ignored while held, and any active boost is cancelled. |
+| RB | Boost, when ready and not braking. |
+| X | Toggle front lights manually when stopped. |
+| B | Trigger the one-second flicker/attack signal. |
+| Menu / Start | Safe exit. |
 
 ## DualSense Feedback
 
@@ -218,7 +250,9 @@ Profiles keep hardware discovery separate from model-specific command meanings:
 - `config/models/tumbler.json` defines PLAYVM command bits, calibration pacing, boost timing, and
   drive/steering limits.
 - `config/gamepads/dualsense.json` defines the DualSense button and axis indices, trigger behavior,
-  and deadzones.
+  deadzones, safe-exit button, and LED support.
+- `config/gamepads/steamdeck.json` defines the Steam Deck/Steam Input SDL mapping and keeps LED
+  support disabled.
 - The saved `port_map.json` is generated by the hub scan and tells the bridge which hub ports are
   drive, steering, lights, and PLAYVM.
 
@@ -233,6 +267,6 @@ pre-commit install
 pytest tests -q
 ```
 
-The tests cover the byte-level startup sequence, PLAYVM command bits, port-map shape, DualSense
-trigger scaling, speed modes, LED colors, rumble behavior, reverse beep cadence, and automatic
-lights.
+The tests cover the byte-level startup sequence, PLAYVM command bits, port-map shape, DualSense and
+Steam Deck profile mappings, Bluetooth status parsing, safe-exit inputs, trigger scaling, speed
+modes, LED colors, rumble behavior, reverse beep cadence, and automatic lights.

@@ -330,7 +330,7 @@ def render_car_dashboard(state: CarTelemetry, width: int = DASHBOARD_MAX_WIDTH) 
     return "\n".join(
         [
             border,
-            line(f"DUALSENSE COCKPIT | {state.model_name} | hub {state.hub_name} | Ctrl+C safe stop"),
+            line(f"GAMEPAD COCKPIT | {state.model_name} | hub {state.hub_name} | Ctrl+C/Esc/Start safe stop"),
             line(),
             line(dashboard_panel_line("DRIVE", f"{direction:<7} {power_text} {drive_bar} power {state.throttle:+4d}")),
             line(

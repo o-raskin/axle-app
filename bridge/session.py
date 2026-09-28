@@ -7,10 +7,11 @@ from dataclasses import dataclass
 from typing import Any
 
 from .audio import ReverseBeep, reverse_beep_status
+from .bluetooth import bluetooth_status
 from .controller import (
     axis_to_percent,
     button_held,
-    gamepad_was_disconnected,
+    poll_controller_events,
     read_drive_state,
     read_trigger_pressures,
     try_init_gamepad,
@@ -29,13 +30,14 @@ from .feedback import (
     update_gamepad_led,
 )
 from .hub_probe import save_probe_outputs, scan_hub
+from .keyboard import TerminalExitPoller
 from .lighting import AttackSignal, AutomaticLights
 from .low_level_control import LowLevelControl
 from .paths import HUB_SCHEME_PATH, PORT_MAP_PATH
 from .platform import release_winrt_sta_for_pygame
 from .port_map import load_port_map, port_id
-from .profiles import GamepadProfile, ModelProfile
-from .safety import SafetyLimits, require_user_acknowledgement
+from .profiles import GamepadProfile, ModelProfile, gamepad_profile_candidates
+from .safety import SafetyLimits
 from .settings import (
     BOOST_FEEDBACK_DELAY_S,
     CRASH_LOCKOUT_S,
@@ -61,9 +63,10 @@ class ConnectedHardware:
     joystick: Any
 
 
-def startup_steps(dualsense: bool, hub: bool, ready: bool) -> list[tuple[str, bool]]:
+def startup_steps(dualsense: bool, hub: bool, ready: bool, bluetooth: bool = True) -> list[tuple[str, bool]]:
     """Checklist shared by startup panels."""
     return [
+        ("Bluetooth enabled", bluetooth),
         ("Gamepad controller detected", dualsense),
         ("Technic Move Hub connected", hub),
         ("Live drive session ready", ready),
@@ -72,29 +75,32 @@ def startup_steps(dualsense: bool, hub: bool, ready: bool) -> list[tuple[str, bo
 
 async def wait_for_gamepad(
     setup: SetupConsole,
-    profile: GamepadProfile | None = None,
+    profiles: list[GamepadProfile],
     reconnect: bool = False,
-) -> tuple[Any, Any]:
+) -> tuple[Any, Any, GamepadProfile]:
     """Wait until the requested gamepad is available, keeping the user informed."""
-    controller_name = profile.name if profile is not None else "Sony DualSense"
+    controller_name = " / ".join(profile.name for profile in profiles)
     title = f"{controller_name} disconnected" if reconnect else f"Connect {controller_name}"
     message = (
         "Reconnect the controller with USB or Bluetooth. Live control is paused."
         if reconnect
         else f"Connect {controller_name} with USB or Bluetooth before the bridge can arm."
     )
-    detail = "macOS and Windows may expose the same controller under different Bluetooth names."
+    detail = "macOS, SteamOS, and Windows may expose the same controller under different names."
     while True:
-        pygame_mod, joystick, issue = try_init_gamepad(profile)
-        if pygame_mod is not None and joystick is not None:
-            setup.show(
-                "Controller ready",
-                f"Controller detected: {joystick.get_name()}",
-                startup_steps(dualsense=True, hub=False, ready=False),
-            )
-            return pygame_mod, joystick
+        issues = []
+        for profile in profiles:
+            pygame_mod, joystick, issue = try_init_gamepad(profile)
+            if pygame_mod is not None and joystick is not None:
+                setup.show(
+                    "Controller ready",
+                    f"Controller detected: {joystick.get_name()} ({profile.name})",
+                    startup_steps(dualsense=True, hub=False, ready=False),
+                )
+                return pygame_mod, joystick, profile
+            issues.append(f"{profile.name}: {issue}")
 
-        issue_detail = f"{detail} Last check: {issue}" if issue else detail
+        issue_detail = f"{detail} Last check: {'; '.join(issues)}" if issues else detail
         setup.show(
             title,
             message,
@@ -106,7 +112,29 @@ async def wait_for_gamepad(
 
 async def wait_for_dualsense(setup: SetupConsole, reconnect: bool = False) -> tuple[Any, Any]:
     """Compatibility wrapper for callers that explicitly wait for a DualSense."""
-    return await wait_for_gamepad(setup, GamepadProfile.load("dualsense"), reconnect)
+    pygame_mod, joystick, _profile = await wait_for_gamepad(setup, [GamepadProfile.load("dualsense")], reconnect)
+    return pygame_mod, joystick
+
+
+async def wait_for_bluetooth(setup: SetupConsole) -> None:
+    """Block startup until Bluetooth appears ready for BLE scanning."""
+    while True:
+        status = bluetooth_status()
+        if status.ready:
+            setup.show(
+                "Bluetooth ready",
+                "Bluetooth is available for controller and hub discovery.",
+                startup_steps(dualsense=False, hub=False, ready=False, bluetooth=True),
+                status.detail,
+            )
+            return
+        setup.show(
+            "Enable Bluetooth",
+            "Turn Bluetooth on before the bridge scans for the gamepad or Technic Move Hub.",
+            startup_steps(dualsense=False, hub=False, ready=False, bluetooth=False),
+            status.detail,
+        )
+        await asyncio.sleep(STARTUP_RETRY_DELAY_S)
 
 
 def load_port_map_for_drive(setup: SetupConsole) -> dict[str, Any] | None:
@@ -316,14 +344,14 @@ async def run_live_session(
 
         release_winrt_sta_for_pygame()
 
-        gamepad_led = ControllerLed.open(pygame_mod)
+        gamepad_led = ControllerLed.open(pygame_mod) if pad.supports_led else ControllerLed()
         reverse_beep = ReverseBeep.open(pygame_mod, log=console.log)
         console.log(
             f"Gamepad: {joystick.get_name()} (axes={joystick.get_numaxes()}, buttons={joystick.get_numbuttons()})"
         )
         console.log(f"Drive +/-{model.max_drive}, steering +/-{model.max_steering}")
         console.log(pad.controls)
-        console.log("Ctrl+C: safe stop and exit")
+        console.log("Ctrl+C, Esc, or Start/Menu: safe stop and exit")
 
         brake_button = pad.button("brake")
         boost_button = pad.button("boost")
@@ -331,6 +359,7 @@ async def run_live_session(
         speed_down_button = pad.button("speed_down")
         front_lights_button = pad.button("front_lights")
         attack_button = pad.button("attack")
+        exit_button = pad.optional_button("exit")
         steer_axis = pad.axis("steer")
         boost_hold = model.boost["hold_s"]
         boost_cooldown = model.boost["cooldown_s"]
@@ -365,199 +394,207 @@ async def run_live_session(
         )
         console.log("Ready.")
 
-        while True:
-            if gamepad_was_disconnected(pygame_mod, joystick):
-                reconnect_reason = RECONNECT_DUALSENSE
-                console.log("Controller disconnected. Motors are stopping; reconnect the controller to continue.")
-                break
-            if not hub.is_connected:
-                reconnect_reason = RECONNECT_HUB
-                console.log("Car hub disconnected. Motors are stopping; press the hub button to reconnect.")
-                break
+        with TerminalExitPoller() as keyboard_exit:
+            while True:
+                disconnected, controller_exit_requested = poll_controller_events(pygame_mod, joystick, exit_button)
+                if keyboard_exit.exit_requested() or controller_exit_requested:
+                    reconnect_reason = SESSION_EXIT
+                    console.log("Exit requested. Motors are stopping.")
+                    break
+                if disconnected:
+                    reconnect_reason = RECONNECT_DUALSENSE
+                    console.log("Controller disconnected. Motors are stopping; reconnect the controller to continue.")
+                    break
+                if not hub.is_connected:
+                    reconnect_reason = RECONNECT_HUB
+                    console.log("Car hub disconnected. Motors are stopping; press the hub button to reconnect.")
+                    break
 
-            now = loop.time()
-            crash_active = crash_lockout.active(now)
+                now = loop.time()
+                crash_active = crash_lockout.active(now)
 
-            brake_pressed = button_held(joystick, brake_button)
-            speed_up_pressed = button_held(joystick, speed_up_button)
-            speed_down_pressed = button_held(joystick, speed_down_button)
-            boost_pressed = button_held(joystick, boost_button)
-            front_lights_pressed = button_held(joystick, front_lights_button)
-            attack_pressed = button_held(joystick, attack_button)
-            brake = brake_pressed and not crash_active
+                brake_pressed = button_held(joystick, brake_button)
+                speed_up_pressed = button_held(joystick, speed_up_button)
+                speed_down_pressed = button_held(joystick, speed_down_button)
+                boost_pressed = button_held(joystick, boost_button)
+                front_lights_pressed = button_held(joystick, front_lights_button)
+                attack_pressed = button_held(joystick, attack_button)
+                brake = brake_pressed and not crash_active
 
-            if not crash_active and speed_up_pressed and not speed_up_prev:
-                previous_speed_mode = speed_mode
-                speed_mode = await change_speed_mode_with_feedback(joystick, speed_mode, 1)
-                if speed_mode != previous_speed_mode:
-                    drive_rumble_paused_until = loop.time() + (SPEED_RUMBLE_DURATION_MS / 1000)
-                ratio = int(SPEED_MODE_RATIOS[speed_mode] * 100)
-                console.log(f"speed mode={speed_mode} trigger_to_power={ratio}%")
-            speed_up_prev = speed_up_pressed
+                if not crash_active and speed_up_pressed and not speed_up_prev:
+                    previous_speed_mode = speed_mode
+                    speed_mode = await change_speed_mode_with_feedback(joystick, speed_mode, 1)
+                    if speed_mode != previous_speed_mode:
+                        drive_rumble_paused_until = loop.time() + (SPEED_RUMBLE_DURATION_MS / 1000)
+                    ratio = int(SPEED_MODE_RATIOS[speed_mode] * 100)
+                    console.log(f"speed mode={speed_mode} trigger_to_power={ratio}%")
+                speed_up_prev = speed_up_pressed
 
-            if not crash_active and speed_down_pressed and not speed_down_prev:
-                previous_speed_mode = speed_mode
-                speed_mode = await change_speed_mode_with_feedback(joystick, speed_mode, -1)
-                if speed_mode != previous_speed_mode:
-                    drive_rumble_paused_until = loop.time() + (SPEED_RUMBLE_DURATION_MS / 1000)
-                ratio = int(SPEED_MODE_RATIOS[speed_mode] * 100)
-                console.log(f"speed mode={speed_mode} trigger_to_power={ratio}%")
-            speed_down_prev = speed_down_pressed
+                if not crash_active and speed_down_pressed and not speed_down_prev:
+                    previous_speed_mode = speed_mode
+                    speed_mode = await change_speed_mode_with_feedback(joystick, speed_mode, -1)
+                    if speed_mode != previous_speed_mode:
+                        drive_rumble_paused_until = loop.time() + (SPEED_RUMBLE_DURATION_MS / 1000)
+                    ratio = int(SPEED_MODE_RATIOS[speed_mode] * 100)
+                    console.log(f"speed mode={speed_mode} trigger_to_power={ratio}%")
+                speed_down_prev = speed_down_pressed
 
-            if brake:
-                throttle = 0
-                trigger_pressure = 0.0
-                forward_pressure, reverse_pressure = read_trigger_pressures(joystick, pad)
-            elif crash_active:
-                throttle = 0
-                trigger_pressure = 0.0
-                forward_pressure = 0.0
-                reverse_pressure = 0.0
-            else:
-                throttle, trigger_pressure, forward_pressure, reverse_pressure = read_drive_state(
-                    joystick,
-                    pad,
-                    model.max_drive,
-                    speed_mode,
-                )
-
-            status_reports = control.drain_status_reports()
-            crash_started = False
-            if status_reports:
-                for _raw, status_flags in status_reports:
-                    crash_started = (
-                        crash_lockout.update(
-                            throttle,
-                            model.max_drive,
-                            now,
-                            impact="impact" in status_flags,
-                            enabled=not brake_pressed,
-                        )
-                        or crash_started
-                    )
-            else:
-                crash_lockout.update(throttle, model.max_drive, now, impact=None, enabled=not brake_pressed)
-
-            if not crash_active and crash_started:
-                crash_active = True
-                throttle = 0
-                trigger_pressure = 0.0
-                forward_pressure = 0.0
-                reverse_pressure = 0.0
-                brake = False
-                boost_until = 0.0
-                boost_feedback_at = 0.0
-                drive_rumble_paused_until = 0.0
-                console.log(f"crash detected: controls locked for {CRASH_LOCKOUT_S:.1f}s")
-
-            if throttle < 0:
-                if reverse_led_started_at is None:
-                    reverse_led_started_at = now
-            else:
-                reverse_led_started_at = None
-            reverse_beep.update(throttle < 0, now)
-
-            if not crash_active and boost_pressed and not boost_prev and now >= boost_ready_at and not brake:
-                boost_until = now + boost_hold
-                boost_feedback_at = now + BOOST_FEEDBACK_DELAY_S
-                boost_ready_at = boost_until + boost_cooldown
-                console.log(f"boost fired, ready again in {boost_hold + boost_cooldown:.1f}s")
-            elif not crash_active and boost_pressed and not boost_prev:
                 if brake:
-                    console.log("boost unavailable while braking")
+                    throttle = 0
+                    trigger_pressure = 0.0
+                    forward_pressure, reverse_pressure = read_trigger_pressures(joystick, pad)
+                elif crash_active:
+                    throttle = 0
+                    trigger_pressure = 0.0
+                    forward_pressure = 0.0
+                    reverse_pressure = 0.0
                 else:
-                    console.log(f"boost not ready ({boost_ready_at - now:.1f}s left)")
-                boost_unavailable_feedback.trigger(joystick, now)
-            boost_prev = boost_pressed
-            if brake or crash_active:
-                boost_until = 0.0
-                boost_feedback_at = 0.0
-            boost = not crash_active and now < boost_until
-            boost_led_feedback = boost_led_feedback_active(boost_feedback_at, boost_until, now)
-            if crash_active:
-                rumble_strength = CRASH_RUMBLE_STRENGTH
-                boost_rumble.update(joystick, rumble_strength)
-            else:
-                rumble_strength = boost_rumble_strength(boost_feedback_at, boost_until, now)
-                if rumble_strength > 0.0 or now >= drive_rumble_paused_until:
-                    if rumble_strength == 0.0:
-                        rumble_strength = drive_rumble_strength(trigger_pressure, speed_mode)
+                    throttle, trigger_pressure, forward_pressure, reverse_pressure = read_drive_state(
+                        joystick,
+                        pad,
+                        model.max_drive,
+                        speed_mode,
+                    )
+
+                status_reports = control.drain_status_reports()
+                crash_started = False
+                if status_reports:
+                    for _raw, status_flags in status_reports:
+                        crash_started = (
+                            crash_lockout.update(
+                                throttle,
+                                model.max_drive,
+                                now,
+                                impact="impact" in status_flags,
+                                enabled=not brake_pressed,
+                            )
+                            or crash_started
+                        )
+                else:
+                    crash_lockout.update(throttle, model.max_drive, now, impact=None, enabled=not brake_pressed)
+
+                if not crash_active and crash_started:
+                    crash_active = True
+                    throttle = 0
+                    trigger_pressure = 0.0
+                    forward_pressure = 0.0
+                    reverse_pressure = 0.0
+                    brake = False
+                    boost_until = 0.0
+                    boost_feedback_at = 0.0
+                    drive_rumble_paused_until = 0.0
+                    console.log(f"crash detected: controls locked for {CRASH_LOCKOUT_S:.1f}s")
+
+                if throttle < 0:
+                    if reverse_led_started_at is None:
+                        reverse_led_started_at = now
+                else:
+                    reverse_led_started_at = None
+                reverse_beep.update(throttle < 0, now)
+
+                if not crash_active and boost_pressed and not boost_prev and now >= boost_ready_at and not brake:
+                    boost_until = now + boost_hold
+                    boost_feedback_at = now + BOOST_FEEDBACK_DELAY_S
+                    boost_ready_at = boost_until + boost_cooldown
+                    console.log(f"boost fired, ready again in {boost_hold + boost_cooldown:.1f}s")
+                elif not crash_active and boost_pressed and not boost_prev:
+                    if brake:
+                        console.log("boost unavailable while braking")
+                    else:
+                        console.log(f"boost not ready ({boost_ready_at - now:.1f}s left)")
+                    boost_unavailable_feedback.trigger(joystick, now)
+                boost_prev = boost_pressed
+                if brake or crash_active:
+                    boost_until = 0.0
+                    boost_feedback_at = 0.0
+                boost = not crash_active and now < boost_until
+                boost_led_feedback = boost_led_feedback_active(boost_feedback_at, boost_until, now)
+                if crash_active:
+                    rumble_strength = CRASH_RUMBLE_STRENGTH
                     boost_rumble.update(joystick, rumble_strength)
-            led_color = update_gamepad_led(
-                gamepad_led,
-                speed_mode,
-                boost_led_feedback,
-                boost_color=boost_led_color(boost_feedback_at, boost_until, now),
-                boost_unavailable_feedback=boost_unavailable_feedback,
-                crash_feedback=crash_active,
-                reverse_started_at=reverse_led_started_at,
-                now=now,
-            )
-
-            if not crash_active and front_lights_pressed and not front_lights_prev:
-                lights.toggle_front_lights()
-            front_lights_prev = front_lights_pressed
-
-            if not crash_active and attack_pressed and not attack_prev:
-                attack_signal.trigger(now)
-            attack_prev = attack_pressed
-
-            flicker = False if crash_active else attack_signal.is_active(now)
-            front_lights_on, rocket_lights_on = (False, False) if crash_active else lights.state_for(throttle, now)
-
-            steering = 0
-            if not crash_active:
-                steering = axis_to_percent(joystick.get_axis(steer_axis), model.max_steering, pad.deadzone)
-            console.update(
-                CarTelemetry(
-                    model_name=model.name,
-                    hub_name=hub.hub_name,
-                    max_drive=model.max_drive,
-                    max_steering=model.max_steering,
-                    throttle=throttle,
-                    steering=steering,
-                    speed_mode=speed_mode,
-                    trigger_pressure=trigger_pressure,
-                    forward_pressure=forward_pressure,
-                    reverse_pressure=reverse_pressure,
-                    brake=brake,
-                    boost=boost,
-                    boost_ready_in=max(0.0, boost_ready_at - now),
-                    crash=crash_active,
-                    crash_lockout_left=crash_lockout.remaining(now),
-                    front_lights_on=front_lights_on,
-                    manual_front_lights_on=lights.front_lights_manual_on,
-                    rocket_lights_on=rocket_lights_on,
-                    flicker=flicker,
-                    led_color=led_color,
-                    rumble_strength=rumble_strength,
-                    reverse_beep=reverse_beep_status(reverse_beep, throttle < 0, now),
-                    speed_up_pressed=speed_up_pressed and not crash_active,
-                    speed_down_pressed=speed_down_pressed and not crash_active,
-                    boost_pressed=boost_pressed and not crash_active,
-                    front_lights_pressed=front_lights_pressed and not crash_active,
-                    attack_pressed=attack_pressed and not crash_active,
+                else:
+                    rumble_strength = boost_rumble_strength(boost_feedback_at, boost_until, now)
+                    if rumble_strength > 0.0 or now >= drive_rumble_paused_until:
+                        if rumble_strength == 0.0:
+                            rumble_strength = drive_rumble_strength(trigger_pressure, speed_mode)
+                        boost_rumble.update(joystick, rumble_strength)
+                led_color = update_gamepad_led(
+                    gamepad_led,
+                    speed_mode,
+                    boost_led_feedback,
+                    boost_color=boost_led_color(boost_feedback_at, boost_until, now),
+                    boost_unavailable_feedback=boost_unavailable_feedback,
+                    crash_feedback=crash_active,
+                    reverse_started_at=reverse_led_started_at,
+                    now=now,
                 )
-            )
 
-            cmd = (throttle, steering, brake, boost, front_lights_on, rocket_lights_on, flicker)
-            if cmd != last_cmd:
-                console.log(
-                    f"cmd speed={throttle} steer={steering} brake={brake} "
-                    f"boost={boost} mode={speed_mode} "
-                    f"front_lights={front_lights_on} rocket_lights={rocket_lights_on} flicker={flicker}"
+                if not crash_active and front_lights_pressed and not front_lights_prev:
+                    lights.toggle_front_lights()
+                front_lights_prev = front_lights_pressed
+
+                if not crash_active and attack_pressed and not attack_prev:
+                    attack_signal.trigger(now)
+                attack_prev = attack_pressed
+
+                flicker = False if crash_active else attack_signal.is_active(now)
+                front_lights_on, rocket_lights_on = (
+                    (False, False) if crash_active else lights.state_for(throttle, now)
                 )
-                await control.drive(
-                    throttle,
-                    steering,
-                    brake=brake,
-                    boost=boost,
-                    lights=front_lights_on,
-                    rocket_lights=rocket_lights_on,
-                    flicker=flicker,
+
+                steering = 0
+                if not crash_active:
+                    steering = axis_to_percent(joystick.get_axis(steer_axis), model.max_steering, pad.deadzone)
+                console.update(
+                    CarTelemetry(
+                        model_name=model.name,
+                        hub_name=hub.hub_name,
+                        max_drive=model.max_drive,
+                        max_steering=model.max_steering,
+                        throttle=throttle,
+                        steering=steering,
+                        speed_mode=speed_mode,
+                        trigger_pressure=trigger_pressure,
+                        forward_pressure=forward_pressure,
+                        reverse_pressure=reverse_pressure,
+                        brake=brake,
+                        boost=boost,
+                        boost_ready_in=max(0.0, boost_ready_at - now),
+                        crash=crash_active,
+                        crash_lockout_left=crash_lockout.remaining(now),
+                        front_lights_on=front_lights_on,
+                        manual_front_lights_on=lights.front_lights_manual_on,
+                        rocket_lights_on=rocket_lights_on,
+                        flicker=flicker,
+                        led_color=led_color,
+                        rumble_strength=rumble_strength,
+                        reverse_beep=reverse_beep_status(reverse_beep, throttle < 0, now),
+                        speed_up_pressed=speed_up_pressed and not crash_active,
+                        speed_down_pressed=speed_down_pressed and not crash_active,
+                        boost_pressed=boost_pressed and not crash_active,
+                        front_lights_pressed=front_lights_pressed and not crash_active,
+                        attack_pressed=attack_pressed and not crash_active,
+                    )
                 )
-                last_cmd = cmd
-            await asyncio.sleep(LOOP_INTERVAL_S)
+
+                cmd = (throttle, steering, brake, boost, front_lights_on, rocket_lights_on, flicker)
+                if cmd != last_cmd:
+                    console.log(
+                        f"cmd speed={throttle} steer={steering} brake={brake} "
+                        f"boost={boost} mode={speed_mode} "
+                        f"front_lights={front_lights_on} rocket_lights={rocket_lights_on} flicker={flicker}"
+                    )
+                    await control.drive(
+                        throttle,
+                        steering,
+                        brake=brake,
+                        boost=boost,
+                        lights=front_lights_on,
+                        rocket_lights=rocket_lights_on,
+                        flicker=flicker,
+                    )
+                    last_cmd = cmd
+                await asyncio.sleep(LOOP_INTERVAL_S)
     except (KeyboardInterrupt, asyncio.CancelledError):
         reconnect_reason = SESSION_EXIT
         console.log("Interrupt - shutting down...")
@@ -587,7 +624,7 @@ async def run_control(
     setup = SetupConsole()
     try:
         model = ModelProfile.load(model_name)
-        pad = GamepadProfile.load(gamepad_name)
+        pad_candidates = gamepad_profile_candidates(gamepad_name)
     except RuntimeError as exc:
         setup.show(
             "Profile configuration problem",
@@ -597,13 +634,14 @@ async def run_control(
         )
         return
 
+    await wait_for_bluetooth(setup)
     port_map = await prepare_port_map_for_drive(setup, hub_name, hub_address)
 
     reconnect_reason: str | None = None
     while True:
-        pygame_mod, joystick = await wait_for_gamepad(
+        pygame_mod, joystick, pad = await wait_for_gamepad(
             setup,
-            pad,
+            pad_candidates,
             reconnect=reconnect_reason == RECONNECT_DUALSENSE,
         )
         hub = await wait_for_hub(
@@ -620,21 +658,12 @@ async def run_control(
                 pass
             return
 
+        setup.show(
+            "Starting live control",
+            f"All checks passed for {model.name} with {pad.name}. Keep the wheels clear.",
+            startup_steps(dualsense=True, hub=True, ready=True),
+        )
         setup.stop()
-        try:
-            require_user_acknowledgement(
-                f"Ready to arm live control for {model.name} with {pad.name}.\n"
-                "Keep the wheels off the ground, clear the area, and be ready to release the controls."
-            )
-        except RuntimeError:
-            print("Live control cancelled before arming.")
-            await hub.disconnect()
-            try:
-                pygame_mod.quit()
-            except Exception:
-                pass
-            return
-
         reconnect_reason = await run_live_session(model, pad, port_map, ConnectedHardware(hub, pygame_mod, joystick))
         if reconnect_reason == SESSION_EXIT:
             return

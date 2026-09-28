@@ -100,7 +100,7 @@ from bridge.low_level_control import LowLevelControl
 from bridge.paths import HUB_SCHEME_PATH, PORT_MAP_PATH, REVERSE_BEEP_PATH
 from bridge.platform import configure_process_for_platform
 from bridge.port_map import load_port_map, port_id
-from bridge.profiles import GamepadProfile, ModelProfile
+from bridge.profiles import GamepadProfile, ModelProfile, gamepad_profile_candidates
 from bridge.safety import SafetyLimits, require_user_acknowledgement
 from bridge.session import (
     ConnectedHardware,
@@ -111,6 +111,7 @@ from bridge.session import (
     safe_shutdown,
     scan_port_map_for_drive,
     startup_steps,
+    wait_for_bluetooth,
     wait_for_dualsense,
     wait_for_gamepad,
     wait_for_hub,
@@ -284,6 +285,7 @@ __all__ = [
     "four_char_code",
     "gamepad_led_color",
     "gamepad_name_is_dualsense",
+    "gamepad_profile_candidates",
     "gamepad_was_disconnected",
     "increase_speed_mode",
     "init_gamepad",
@@ -329,6 +331,7 @@ __all__ = [
     "trigger_amount",
     "try_init_gamepad",
     "update_gamepad_led",
+    "wait_for_bluetooth",
     "wait_for_dualsense",
     "wait_for_gamepad",
     "wait_for_hub",
@@ -359,7 +362,7 @@ async def main() -> None:
         help="List audio outputs and selected reverse beep device",
     )
     parser.add_argument("--model", default="tumbler", help="Model profile in config/models/")
-    parser.add_argument("--gamepad", default="dualsense", help="Gamepad profile in config/gamepads/")
+    parser.add_argument("--gamepad", default="auto", help="Gamepad profile in config/gamepads/ or 'auto'")
     parser.add_argument("--name", default=DEFAULT_HUB_NAME, help="Technic hub name to scan/connect")
     parser.add_argument("--address", default=None, help="Exact BLE address for a specific Technic hub")
     args = parser.parse_args()
@@ -369,13 +372,16 @@ async def main() -> None:
         return
 
     if args.scan_hub:
+        setup = SetupConsole()
+        await wait_for_bluetooth(setup)
+        setup.stop()
         await run_hub_scan(args.name, args.address)
         return
 
     if args.probe:
         setup = SetupConsole()
-        pad = GamepadProfile.load(args.gamepad)
-        pygame_mod, joystick = await wait_for_gamepad(setup, pad)
+        pad_candidates = gamepad_profile_candidates(args.gamepad)
+        pygame_mod, joystick, _pad = await wait_for_gamepad(setup, pad_candidates)
         setup.stop()
         run_probe(pygame_mod, joystick)
         return

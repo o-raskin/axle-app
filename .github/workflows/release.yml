@@ -45,7 +45,8 @@ jobs:
     outputs:
       version: ${{ steps.semver.outputs.version }}
       tag: ${{ steps.semver.outputs.tag }}
-      asset_name: ${{ steps.semver.outputs.asset_name }}
+      macos_asset_name: ${{ steps.semver.outputs.macos_asset_name }}
+      linux_asset_name: ${{ steps.semver.outputs.linux_asset_name }}
 
     steps:
       - name: Compute version
@@ -54,18 +55,21 @@ jobs:
           set -euo pipefail
           version="${RELEASE_MAJOR}.${RELEASE_MINOR}.${GITHUB_RUN_NUMBER}"
           tag="v${version}"
-          asset_name="lego-technic-gamepad-bridge-${tag}-macos-arm64"
+          macos_asset_name="lego-technic-gamepad-bridge-${tag}-macos-arm64"
+          linux_asset_name="lego-technic-gamepad-bridge-${tag}-linux-x86_64"
 
           echo "version=${version}" >> "$GITHUB_OUTPUT"
           echo "tag=${tag}" >> "$GITHUB_OUTPUT"
-          echo "asset_name=${asset_name}" >> "$GITHUB_OUTPUT"
+          echo "macos_asset_name=${macos_asset_name}" >> "$GITHUB_OUTPUT"
+          echo "linux_asset_name=${linux_asset_name}" >> "$GITHUB_OUTPUT"
 
           echo "Version: ${version}"
           echo "Tag: ${tag}"
-          echo "Asset: ${asset_name}"
+          echo "macOS asset: ${macos_asset_name}"
+          echo "Linux asset: ${linux_asset_name}"
 
-  release:
-    name: Build and publish release
+  build_macos_release:
+    name: Build macOS release
     runs-on: macos-latest
     timeout-minutes: 30
     needs: [lint, version]
@@ -90,43 +94,98 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p release
-          cp dist/lego-technic-gamepad-bridge "release/${{ needs.version.outputs.asset_name }}"
-          chmod +x "release/${{ needs.version.outputs.asset_name }}"
+          cp dist/lego-technic-gamepad-bridge "release/${{ needs.version.outputs.macos_asset_name }}"
+          chmod +x "release/${{ needs.version.outputs.macos_asset_name }}"
 
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ needs.version.outputs.asset_name }}
-          path: release/${{ needs.version.outputs.asset_name }}
+          name: ${{ needs.version.outputs.macos_asset_name }}
+          path: release/${{ needs.version.outputs.macos_asset_name }}
           if-no-files-found: error
           retention-days: 30
+
+  build_linux_release:
+    name: Build Linux x86_64 release
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: [lint, version]
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.9"
+
+      - name: Build single-file executable
+        run: PYTHON_BIN=python bash scripts/build_linux_release.sh
+
+      - name: Smoke test executable
+        run: dist/lego-technic-gamepad-bridge --help
+
+      - name: Stage release asset
+        run: |
+          set -euo pipefail
+          mkdir -p release
+          cp dist/lego-technic-gamepad-bridge "release/${{ needs.version.outputs.linux_asset_name }}"
+          chmod +x "release/${{ needs.version.outputs.linux_asset_name }}"
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ needs.version.outputs.linux_asset_name }}
+          path: release/${{ needs.version.outputs.linux_asset_name }}
+          if-no-files-found: error
+          retention-days: 30
+
+  publish_release:
+    name: Publish release
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [version, build_macos_release, build_linux_release]
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Download release assets
+        uses: actions/download-artifact@v4
+        with:
+          path: release
+          merge-multiple: true
 
       - name: Publish GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ needs.version.outputs.version }}
           TAG: ${{ needs.version.outputs.tag }}
-          ASSET_NAME: ${{ needs.version.outputs.asset_name }}
+          MACOS_ASSET_NAME: ${{ needs.version.outputs.macos_asset_name }}
+          LINUX_ASSET_NAME: ${{ needs.version.outputs.linux_asset_name }}
         run: |
           set -euo pipefail
-          asset="release/${ASSET_NAME}"
+          macos_asset="release/${MACOS_ASSET_NAME}"
+          linux_asset="release/${LINUX_ASSET_NAME}"
           run_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
 
           cat > release-notes.md <<EOF
-          Automated macOS build.
+          Automated macOS and Linux x86_64 builds.
 
           Version: ${VERSION}
           Commit: ${GITHUB_SHA}
           Branch: ${GITHUB_REF_NAME}
           Workflow run: ${run_url}
-          Artifact: ${ASSET_NAME}
+          Artifacts:
+          - ${MACOS_ASSET_NAME}
+          - ${LINUX_ASSET_NAME}
           EOF
 
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" "$asset#$ASSET_NAME" --clobber
+            gh release upload "$TAG" "$macos_asset#$MACOS_ASSET_NAME" "$linux_asset#$LINUX_ASSET_NAME" --clobber
             gh release edit "$TAG" --title "$TAG" --notes-file release-notes.md
           else
-            gh release create "$TAG" "$asset#$ASSET_NAME" \
+            gh release create "$TAG" "$macos_asset#$MACOS_ASSET_NAME" "$linux_asset#$LINUX_ASSET_NAME" \
               --target "$GITHUB_SHA" \
               --title "$TAG" \
               --notes-file release-notes.md

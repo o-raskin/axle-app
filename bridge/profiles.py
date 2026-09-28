@@ -15,6 +15,8 @@ from . import paths
 
 CONFIG_DIR = paths.CONFIG_DIR
 PORT_MAP_PATH = paths.PORT_MAP_PATH
+AUTO_GAMEPAD_PROFILE = "auto"
+AUTO_GAMEPAD_CANDIDATES = ("dualsense", "steamdeck")
 
 
 def _need(mapping: dict[str, Any], key: str, owner: str, what: str) -> Any:
@@ -84,6 +86,7 @@ class GamepadProfile:
         self.trigger_deadzone: float = data.get("trigger_deadzone", self.deadzone)
         # Measured for this pad, not sniffed at runtime: DualSense triggers idle at -1.0.
         self.triggers_rest_negative: bool = data["triggers_rest_negative"]
+        self.supports_led: bool = bool(data.get("supports_led", False))
         self.controls: str = data["controls"]
         self.name_hints: tuple[str, ...] = tuple(str(hint).lower() for hint in data.get("name_hints", []))
         self.exclude_name_hints: tuple[str, ...] = tuple(
@@ -99,6 +102,12 @@ class GamepadProfile:
         """Button index for an action, or an error naming what this pad has."""
         return int(_need(self.buttons, action, self.name, "button"))
 
+    def optional_button(self, action: str) -> int | None:
+        """Return a button index when a profile defines an optional action."""
+        if action not in self.buttons:
+            return None
+        return int(self.buttons[action])
+
     def axis(self, action: str) -> int:
         """Axis index for an action, or an error naming what this pad has."""
         return int(_need(self.axes, action, self.name, "axis"))
@@ -111,3 +120,10 @@ class GamepadProfile:
         if not self.name_hints:
             return True
         return any(hint in lowered for hint in self.name_hints)
+
+
+def gamepad_profile_candidates(name: str) -> list[GamepadProfile]:
+    """Return one or more gamepad profiles to try for a CLI profile name."""
+    if name != AUTO_GAMEPAD_PROFILE:
+        return [GamepadProfile.load(name)]
+    return [GamepadProfile.load(candidate) for candidate in AUTO_GAMEPAD_CANDIDATES]

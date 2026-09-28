@@ -129,19 +129,39 @@ def try_init_gamepad(profile: GamepadProfile | None = None) -> tuple[Any | None,
         return None, None, str(exc)
 
 
-def gamepad_was_disconnected(pygame_mod: Any, joystick: Any) -> bool:
-    """Detect a controller removal event before reading axes/buttons."""
+def poll_controller_events(
+    pygame_mod: Any,
+    joystick: Any,
+    exit_button_index: int | None = None,
+) -> tuple[bool, bool]:
+    """Return controller-disconnected and exit-requested states from one pygame event drain."""
     try:
         pygame_mod.event.pump()
         instance_id = joystick.get_instance_id() if hasattr(joystick, "get_instance_id") else None
+        disconnected = False
+        exit_requested = False
         for event in pygame_mod.event.get():
-            if event.type != getattr(pygame_mod, "JOYDEVICEREMOVED", object()):
-                continue
-            if instance_id is None or getattr(event, "instance_id", None) == instance_id:
-                return True
-        return not joystick.get_init() or pygame_mod.joystick.get_count() == 0
+            event_type = getattr(event, "type", None)
+            if event_type == getattr(pygame_mod, "JOYDEVICEREMOVED", object()):
+                if instance_id is None or getattr(event, "instance_id", None) == instance_id:
+                    disconnected = True
+            elif event_type == getattr(pygame_mod, "JOYBUTTONDOWN", object()):
+                if exit_button_index is not None and getattr(event, "button", None) == exit_button_index:
+                    if instance_id is None or getattr(event, "instance_id", None) in {None, instance_id}:
+                        exit_requested = True
+            elif event_type == getattr(pygame_mod, "KEYDOWN", object()):
+                if getattr(event, "key", None) == getattr(pygame_mod, "K_ESCAPE", object()):
+                    exit_requested = True
+        disconnected = disconnected or not joystick.get_init() or pygame_mod.joystick.get_count() == 0
+        return disconnected, exit_requested
     except Exception:
-        return True
+        return True, False
+
+
+def gamepad_was_disconnected(pygame_mod: Any, joystick: Any) -> bool:
+    """Detect a controller removal event before reading axes/buttons."""
+    disconnected, _exit_requested = poll_controller_events(pygame_mod, joystick)
+    return disconnected
 
 
 def snapshot(joystick: Any) -> dict[str, Any]:

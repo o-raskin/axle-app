@@ -8,7 +8,8 @@
     "speed_up": 11,
     "speed_down": 12,
     "front_lights": 2,
-    "attack": 1
+    "attack": 1,
+    "exit": 6
   },
   "axes": {
     "steer": 0,
@@ -18,5 +19,6 @@
   "deadzone": 0.15,
   "trigger_deadzone": 0.01,
   "triggers_rest_negative": true,
-  "controls": "Left X: steer | R2/L2: drive with trigger-pressure rumble scaled by speed mode | D-pad Up/Down: speed mode 1-3 with rumble and white LED brightness | reverse: green/white LED cycle and DualSense speaker beep | L1: brake | R1: boost with delayed strong rumble and orange LED; unavailable boost flashes red | Square: manual front lights | Circle: 1s flicker signal | auto: front forward, rockets reverse blink"
+  "supports_led": true,
+  "controls": "Left X: steer | R2/L2: drive with trigger-pressure rumble scaled by speed mode | D-pad Up/Down: speed mode 1-3 with rumble and white LED brightness | reverse: green/white LED cycle and DualSense speaker beep | L1: brake | R1: boost with delayed strong rumble and orange LED; unavailable boost flashes red | Square: manual front lights | Circle: 1s flicker signal | Options/Esc: safe exit | auto: front forward, rockets reverse blink"
 }

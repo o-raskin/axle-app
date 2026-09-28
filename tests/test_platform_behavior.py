@@ -4,7 +4,7 @@ import sys
 from pathlib import Path
 from typing import Any, cast
 
-from bridge import audio, controller, session
+from bridge import audio, bluetooth, controller, session
 from bridge.profiles import GamepadProfile
 
 
@@ -108,6 +108,52 @@ class FakePygameForJoystick:
         self.quit_count += 1
 
 
+class FakePygameEventItem:
+    def __init__(self, event_type: int, button: int | None = None, key: int | None = None) -> None:
+        self.type = event_type
+        self.button = button
+        self.key = key
+        self.instance_id = 42
+
+
+class FakePygameEventQueue:
+    def __init__(self, events: list[FakePygameEventItem]) -> None:
+        self.events = events
+        self.pump_count = 0
+
+    def pump(self) -> None:
+        self.pump_count += 1
+
+    def get(self) -> list[FakePygameEventItem]:
+        events = self.events
+        self.events = []
+        return events
+
+
+class FakeJoystickForEvents:
+    def get_instance_id(self) -> int:
+        return 42
+
+    def get_init(self) -> bool:
+        return True
+
+
+class FakeJoystickModuleForEvents:
+    def get_count(self) -> int:
+        return 1
+
+
+class FakePygameForEvents:
+    JOYDEVICEREMOVED = 1
+    JOYBUTTONDOWN = 2
+    KEYDOWN = 3
+    K_ESCAPE = 27
+
+    def __init__(self, events: list[FakePygameEventItem]) -> None:
+        self.event = FakePygameEventQueue(events)
+        self.joystick = FakeJoystickModuleForEvents()
+
+
 def test_gamepad_profile_matches_controller_names_from_data() -> None:
     pad = GamepadProfile.load("dualsense")
 
@@ -115,6 +161,75 @@ def test_gamepad_profile_matches_controller_names_from_data() -> None:
     assert pad.matches_device_name("Wireless Controller")
     assert pad.matches_device_name("PS5 Controller")
     assert not pad.matches_device_name("Xbox Wireless Controller")
+    assert pad.axis("steer") == 0
+    assert pad.axis("throttle_reverse") == 4
+    assert pad.axis("throttle_forward") == 5
+    assert pad.button("brake") == 9
+    assert pad.button("boost") == 10
+    assert pad.optional_button("exit") == 6
+    assert pad.supports_led
+
+
+def test_steam_deck_profile_matches_steam_input_names() -> None:
+    pad = GamepadProfile.load("steamdeck")
+
+    assert pad.matches_device_name("Steam Deck")
+    assert pad.matches_device_name("Steam Virtual Gamepad")
+    assert pad.matches_device_name("Xbox 360 Controller")
+    assert pad.axis("steer") == 0
+    assert pad.axis("throttle_reverse") == 4
+    assert pad.axis("throttle_forward") == 5
+    assert pad.button("brake") == 9
+    assert pad.button("boost") == 10
+    assert pad.optional_button("exit") == 6
+    assert not pad.supports_led
+
+
+def test_start_button_requests_safe_exit() -> None:
+    pygame = FakePygameForEvents([FakePygameEventItem(FakePygameForEvents.JOYBUTTONDOWN, button=6)])
+
+    disconnected, exit_requested = controller.poll_controller_events(pygame, FakeJoystickForEvents(), 6)
+
+    assert not disconnected
+    assert exit_requested
+    assert pygame.event.pump_count == 1
+
+
+def test_escape_key_requests_safe_exit() -> None:
+    pygame = FakePygameForEvents([FakePygameEventItem(FakePygameForEvents.KEYDOWN, key=FakePygameForEvents.K_ESCAPE)])
+
+    disconnected, exit_requested = controller.poll_controller_events(pygame, FakeJoystickForEvents(), None)
+
+    assert not disconnected
+    assert exit_requested
+
+
+def test_linux_bluetooth_status_reads_bluez_power(monkeypatch: Any) -> None:
+    def fake_run(_command: list[str]) -> bluetooth.CommandStatus:
+        return bluetooth.CommandStatus(0, stdout="Controller AA:BB\n    Powered: yes\n")
+
+    monkeypatch.setattr(bluetooth.sys, "platform", "linux")
+    monkeypatch.setattr(bluetooth, "run_status_command", fake_run)
+
+    status = bluetooth.bluetooth_status()
+
+    assert status.ready
+    assert "powered on" in status.detail
+
+
+def test_macos_bluetooth_status_reports_powered_off(monkeypatch: Any) -> None:
+    def fake_run(command: list[str]) -> bluetooth.CommandStatus:
+        if command[0] == "defaults":
+            return bluetooth.CommandStatus(0, stdout="0\n")
+        return bluetooth.CommandStatus(1, stderr="should not be called")
+
+    monkeypatch.setattr(bluetooth.sys, "platform", "darwin")
+    monkeypatch.setattr(bluetooth, "run_status_command", fake_run)
+
+    status = bluetooth.bluetooth_status()
+
+    assert not status.ready
+    assert "powered off" in status.detail
 
 
 def test_gamepad_retry_refreshes_joystick_snapshot_after_initial_absence(monkeypatch: Any) -> None:

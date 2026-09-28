@@ -572,7 +572,7 @@ def test_car_dashboard_renders_current_action_state() -> None:
         width=96,
     )
 
-    assert "DUALSENSE COCKPIT" in dashboard
+    assert "GAMEPAD COCKPIT" in dashboard
     assert "DRIVE" in dashboard
     assert "REVERSE" in dashboard
     assert "mode 2 / 50%" in dashboard
