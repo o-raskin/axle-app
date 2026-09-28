@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import asyncio
+import os
 import sys
 from pathlib import Path
 from typing import Any, cast
 
-from bridge import audio, bluetooth, controller, session
+from bridge import audio, bluetooth, controller, platform, session
 from bridge.profiles import GamepadProfile, gamepad_profile_candidates
 
 
@@ -154,6 +156,45 @@ class FakePygameForEvents:
         self.joystick = FakeJoystickModuleForEvents()
 
 
+class FakePygameHandle:
+    def __init__(self) -> None:
+        self.quit_count = 0
+
+    def quit(self) -> None:
+        self.quit_count += 1
+
+
+class FakeNamedJoystick:
+    def __init__(self, name: str = "DualSense Wireless Controller") -> None:
+        self.name = name
+
+    def get_name(self) -> str:
+        return self.name
+
+
+class FakeDriveHub:
+    events: list[str] = []
+    instances: list["FakeDriveHub"] = []
+
+    def __init__(self, hub_name: str = "Technic Move", hub_address: str | None = None) -> None:
+        self.hub_name = hub_name
+        self.hub_address = hub_address
+        self.disconnect_count = 0
+        FakeDriveHub.instances.append(self)
+
+    async def connect(self) -> None:
+        FakeDriveHub.events.append("hub-connect-start")
+        await asyncio.sleep(0.02)
+        FakeDriveHub.events.append("hub-connect-done")
+
+    async def wait_for_topology(self) -> None:
+        FakeDriveHub.events.append("hub-topology")
+
+    async def disconnect(self) -> None:
+        self.disconnect_count += 1
+        FakeDriveHub.events.append("hub-disconnect")
+
+
 def test_gamepad_profile_matches_controller_names_from_data() -> None:
     pad = GamepadProfile.load("dualsense")
 
@@ -168,6 +209,24 @@ def test_gamepad_profile_matches_controller_names_from_data() -> None:
     assert pad.button("boost") == 10
     assert pad.optional_button("exit") == 6
     assert pad.supports_led
+
+
+def test_platform_config_sets_steam_deck_sdl_hints(monkeypatch: Any) -> None:
+    for name in platform.STEAM_DECK_SDL_HINTS:
+        monkeypatch.delenv(name, raising=False)
+
+    platform.configure_process_for_platform()
+
+    for name, value in platform.STEAM_DECK_SDL_HINTS.items():
+        assert os.environ[name] == value
+
+
+def test_platform_config_preserves_explicit_sdl_hints(monkeypatch: Any) -> None:
+    monkeypatch.setenv("SDL_JOYSTICK_HIDAPI_STEAMDECK", "0")
+
+    platform.configure_process_for_platform()
+
+    assert os.environ["SDL_JOYSTICK_HIDAPI_STEAMDECK"] == "0"
 
 
 def test_steam_deck_profile_matches_steam_input_names() -> None:
@@ -285,6 +344,43 @@ def test_missing_port_map_returns_none_and_explains_next_step(monkeypatch: Any, 
     assert setup.calls
     assert setup.calls[-1][0] == "Hub scan required"
     assert "hub scan" in setup.calls[-1][3]
+
+
+def test_drive_hardware_wait_scans_hub_while_gamepad_is_missing(monkeypatch: Any) -> None:
+    setup = SetupRecorder()
+    pad = GamepadProfile.load("dualsense")
+    pygame = FakePygameHandle()
+    joystick = FakeNamedJoystick()
+    gamepad_attempts = 0
+    port_map = {"hub": {"name": "Technic Move", "address": None}, "roles": {}}
+    FakeDriveHub.events = []
+    FakeDriveHub.instances = []
+
+    def fake_try_init_gamepad_candidates(
+        profiles: list[GamepadProfile],
+    ) -> tuple[session.GamepadConnection | None, str]:
+        nonlocal gamepad_attempts
+        gamepad_attempts += 1
+        if gamepad_attempts == 1:
+            FakeDriveHub.events.append("gamepad-missing")
+            return None, "No gamepad detected"
+        FakeDriveHub.events.append("gamepad-ready")
+        return session.GamepadConnection(pygame, joystick, profiles[0]), ""
+
+    monkeypatch.setattr(session, "STARTUP_RETRY_DELAY_S", 0.01)
+    monkeypatch.setattr(session, "TechnicMoveHub", FakeDriveHub)
+    monkeypatch.setattr(session, "required_hub_port_issue", lambda _hub, _port_map: None)
+    monkeypatch.setattr(session, "try_init_gamepad_candidates", fake_try_init_gamepad_candidates)
+
+    result = asyncio.run(session.wait_for_drive_hardware(cast(Any, setup), port_map, [pad]))
+
+    assert result is not None
+    connected_pad, hardware = result
+    assert connected_pad is pad
+    assert hardware.hub is FakeDriveHub.instances[0]
+    assert FakeDriveHub.events.index("hub-connect-start") < FakeDriveHub.events.index("gamepad-ready")
+    assert gamepad_attempts >= 2
+    assert pygame.quit_count == 0
 
 
 def test_coreaudio_helpers_are_noops_off_macos(monkeypatch: Any) -> None:

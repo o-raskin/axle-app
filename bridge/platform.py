@@ -5,10 +5,19 @@ from __future__ import annotations
 import os
 import sys
 
+STEAM_DECK_SDL_HINTS = {
+    "SDL_JOYSTICK_ALLOW_BACKGROUND_EVENTS": "1",
+    "SDL_JOYSTICK_HIDAPI": "1",
+    "SDL_JOYSTICK_HIDAPI_STEAM": "1",
+    "SDL_JOYSTICK_HIDAPI_STEAMDECK": "1",
+}
+
 
 def configure_process_for_platform() -> None:
     """Apply process-wide compatibility settings before pygame or bleak are imported."""
     os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
+    for name, value in STEAM_DECK_SDL_HINTS.items():
+        os.environ.setdefault(name, value)
     if sys.platform == "win32":
         # Bleak/WinRT needs an MTA. This must be set before bleak imports initialize COM.
         sys.coinit_flags = 0  # type: ignore[attr-defined]

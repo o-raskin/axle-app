@@ -89,6 +89,7 @@ Useful release commands:
 ./lego-technic-gamepad-bridge             # guided live control; scans first if needed
 ./lego-technic-gamepad-bridge --scan-hub  # refresh the saved hub port map without driving
 ./lego-technic-gamepad-bridge --probe     # show gamepad axes/buttons, no hub
+./lego-technic-gamepad-bridge --gamepad-devices
 ./lego-technic-gamepad-bridge --audio-devices
 ./lego-technic-gamepad-bridge --gamepad dualsense
 ./lego-technic-gamepad-bridge --gamepad steamdeck
@@ -104,6 +105,18 @@ to reconnect to the exact same hub, pass its BLE address:
 On Steam Deck, download the AppImage in Desktop Mode, mark it executable, and add the AppImage to
 Steam as a Non-Steam Game if you want to launch it from Game Mode. Directly launching the AppImage
 opens its own Konsole window; do not use Dolphin's raw-binary `Run with Konsole` path for normal use.
+
+If startup remains stuck on `Gamepad controller detected`, run:
+
+```bash
+./lego-technic-gamepad-bridge-v...-linux-x86_64.AppImage --gamepad-devices
+```
+
+If that report says `joystick_count=0`, SDL/Pygame cannot see a controller at all. On Steam Deck this
+usually means the app is not being launched with a gamepad-visible Steam Input path; add the AppImage
+to Steam and run it from Steam with a gamepad layout, or switch Desktop Mode controls into gamepad
+mode before launching. If `joystick_count` is greater than zero, send the report and add/update a
+profile for the reported SDL name and axis/button counts.
 
 ## Build Release Binaries
 

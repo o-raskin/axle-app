@@ -34,6 +34,7 @@ from bridge.audio import (
 from bridge.controller import (
     axis_to_percent,
     button_held,
+    gamepad_diagnostics,
     gamepad_name_is_dualsense,
     gamepad_was_disconnected,
     init_gamepad,
@@ -104,6 +105,8 @@ from bridge.profiles import GamepadProfile, ModelProfile, gamepad_profile_candid
 from bridge.safety import SafetyLimits, require_user_acknowledgement
 from bridge.session import (
     ConnectedHardware,
+    HubTarget,
+    connect_hub_for_drive,
     load_port_map_for_drive,
     required_hub_port_issue,
     run_control,
@@ -112,6 +115,7 @@ from bridge.session import (
     scan_port_map_for_drive,
     startup_steps,
     wait_for_bluetooth,
+    wait_for_drive_hardware,
     wait_for_dualsense,
     wait_for_gamepad,
     wait_for_hub,
@@ -237,6 +241,7 @@ __all__ = [
     "CoreAudioOutputDevice",
     "CrashLockout",
     "GamepadProfile",
+    "HubTarget",
     "LiveConsole",
     "LowLevelControl",
     "MacAfplayBeepPlayer",
@@ -259,6 +264,7 @@ __all__ = [
     "clip_terminal_line",
     "configure_process_for_platform",
     "configure_sdl_controller_led",
+    "connect_hub_for_drive",
     "coreaudio",
     "coreaudio_default_output_device",
     "coreaudio_has_output_streams",
@@ -283,6 +289,7 @@ __all__ = [
     "drive_rumble_strength",
     "dualsense_audio_device",
     "four_char_code",
+    "gamepad_diagnostics",
     "gamepad_led_color",
     "gamepad_name_is_dualsense",
     "gamepad_profile_candidates",
@@ -332,6 +339,7 @@ __all__ = [
     "try_init_gamepad",
     "update_gamepad_led",
     "wait_for_bluetooth",
+    "wait_for_drive_hardware",
     "wait_for_dualsense",
     "wait_for_gamepad",
     "wait_for_hub",
@@ -355,6 +363,7 @@ async def main() -> None:
     )
     parser.add_argument("--arm", action="store_true", help="Live control with hub (default)")
     parser.add_argument("--probe", action="store_true", help="Log gamepad axes/buttons without connecting to the hub")
+    parser.add_argument("--gamepad-devices", action="store_true", help="Print SDL/Pygame gamepad diagnostics and exit")
     parser.add_argument("--scan-hub", action="store_true", help="Scan the hub and save the car port map")
     parser.add_argument(
         "--audio-devices",
@@ -369,6 +378,10 @@ async def main() -> None:
 
     if args.audio_devices:
         run_audio_probe()
+        return
+
+    if args.gamepad_devices:
+        print(gamepad_diagnostics())
         return
 
     if args.scan_hub:
