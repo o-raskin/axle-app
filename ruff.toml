@@ -26,6 +26,7 @@ unfixable = []
 # and LWP3 message/device ids read worse as invented constants than as the spec's own values.
 "bridge/transport.py" = ["PLR2004"]
 "bridge/low_level_control.py" = ["PLR2004"]
+"bridge/cars/tumbler/low_level_control.py" = ["PLR2004"]
 # Entry-point scripts: local helpers around a control loop, not a documented API surface.
 "gamepad_bridge.py" = ["D103"]
 "probe_hub.py" = ["D103"]

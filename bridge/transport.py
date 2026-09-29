@@ -6,7 +6,7 @@ from collections import deque
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
-from .platform import configure_process_for_platform
+from .platforms.current import configure_process_for_platform
 
 configure_process_for_platform()
 

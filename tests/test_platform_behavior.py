@@ -6,8 +6,13 @@ import sys
 from pathlib import Path
 from typing import Any, cast
 
-from bridge import audio, bluetooth, controller, platform, session
-from bridge.profiles import GamepadProfile, gamepad_profile_candidates
+from bridge import audio, session
+from bridge.cars.model_profiles import available_model_choices
+from bridge.gamepads import input as gamepad_input
+from bridge.gamepads.profile_loader import GamepadProfile, gamepad_profile_candidates
+from bridge.platforms import current as platform_current
+from bridge.platforms import linux, macos, steamdeck_platform
+from bridge.platforms.common import CommandStatus
 
 
 class SetupRecorder:
@@ -281,24 +286,25 @@ def test_gamepad_profile_matches_controller_names_from_data() -> None:
     assert pad.axis("throttle_forward") == 5
     assert pad.button("brake") == 9
     assert pad.button("boost") == 10
+    assert pad.button("confirm") == 0
     assert pad.optional_button("exit") == 6
     assert pad.supports_led
 
 
 def test_platform_config_sets_steam_deck_sdl_hints(monkeypatch: Any) -> None:
-    for name in platform.STEAM_DECK_SDL_HINTS:
+    for name in steamdeck_platform.SDL_HINTS:
         monkeypatch.delenv(name, raising=False)
 
-    platform.configure_process_for_platform()
+    platform_current.configure_process_for_platform()
 
-    for name, value in platform.STEAM_DECK_SDL_HINTS.items():
+    for name, value in steamdeck_platform.SDL_HINTS.items():
         assert os.environ[name] == value
 
 
 def test_platform_config_preserves_explicit_sdl_hints(monkeypatch: Any) -> None:
     monkeypatch.setenv("SDL_JOYSTICK_HIDAPI_STEAMDECK", "0")
 
-    platform.configure_process_for_platform()
+    platform_current.configure_process_for_platform()
 
     assert os.environ["SDL_JOYSTICK_HIDAPI_STEAMDECK"] == "0"
 
@@ -314,8 +320,22 @@ def test_steam_deck_profile_matches_steam_input_names() -> None:
     assert pad.axis("throttle_forward") == 5
     assert pad.button("brake") == 9
     assert pad.button("boost") == 10
+    assert pad.button("confirm") == 0
     assert pad.optional_button("exit") == 6
     assert not pad.supports_led
+
+
+def test_model_profiles_are_listed_for_startup_selection() -> None:
+    choices = available_model_choices()
+
+    assert ("tumbler", "42239 Batmobile Tumbler") in [(choice.profile_id, choice.name) for choice in choices]
+
+
+def test_model_selection_actions_wrap_and_confirm() -> None:
+    assert session.apply_model_selection_action(0, 3, "up") == (2, False, False)
+    assert session.apply_model_selection_action(2, 3, "down") == (0, False, False)
+    assert session.apply_model_selection_action(1, 3, "confirm") == (1, True, False)
+    assert session.apply_model_selection_action(1, 3, "cancel") == (1, False, True)
 
 
 def test_auto_gamepad_candidates_end_with_generic_sdl_fallback() -> None:
@@ -335,7 +355,7 @@ def test_generic_sdl_profile_opens_unknown_single_controller(monkeypatch: Any) -
     monkeypatch.setitem(sys.modules, "pygame", fake_pygame)
     pad = GamepadProfile.load("generic_sdl")
 
-    pygame_mod, joystick, issue = controller.try_init_gamepad(pad)
+    pygame_mod, joystick, issue = gamepad_input.try_init_gamepad(pad)
 
     assert pygame_mod is fake_pygame
     assert joystick is fake_pygame.joystick.device
@@ -346,10 +366,10 @@ def test_steam_deck_opens_sdl_game_controller_when_raw_joystick_count_is_zero(mo
     fake_pygame = FakePygameForJoystick([0], "unused")
     fake_sdl_controller = FakeSdlControllerModule()
     monkeypatch.setitem(sys.modules, "pygame", fake_pygame)
-    monkeypatch.setattr(controller, "sdl2_controller_module", lambda _pygame_mod: fake_sdl_controller)
+    monkeypatch.setattr(gamepad_input, "sdl2_controller_module", lambda _pygame_mod: fake_sdl_controller)
     pad = GamepadProfile.load("steamdeck")
 
-    pygame_mod, joystick, issue = controller.try_init_gamepad(pad)
+    pygame_mod, joystick, issue = gamepad_input.try_init_gamepad(pad)
 
     assert pygame_mod is fake_pygame
     assert issue is None
@@ -367,7 +387,7 @@ def test_steam_deck_opens_sdl_game_controller_when_raw_joystick_count_is_zero(mo
 def test_start_button_requests_safe_exit() -> None:
     pygame = FakePygameForEvents([FakePygameEventItem(FakePygameForEvents.JOYBUTTONDOWN, button=6)])
 
-    disconnected, exit_requested = controller.poll_controller_events(pygame, FakeJoystickForEvents(), 6)
+    disconnected, exit_requested = gamepad_input.poll_controller_events(pygame, FakeJoystickForEvents(), 6)
 
     assert not disconnected
     assert exit_requested
@@ -377,35 +397,33 @@ def test_start_button_requests_safe_exit() -> None:
 def test_escape_key_requests_safe_exit() -> None:
     pygame = FakePygameForEvents([FakePygameEventItem(FakePygameForEvents.KEYDOWN, key=FakePygameForEvents.K_ESCAPE)])
 
-    disconnected, exit_requested = controller.poll_controller_events(pygame, FakeJoystickForEvents(), None)
+    disconnected, exit_requested = gamepad_input.poll_controller_events(pygame, FakeJoystickForEvents(), None)
 
     assert not disconnected
     assert exit_requested
 
 
 def test_linux_bluetooth_status_reads_bluez_power(monkeypatch: Any) -> None:
-    def fake_run(_command: list[str]) -> bluetooth.CommandStatus:
-        return bluetooth.CommandStatus(0, stdout="Controller AA:BB\n    Powered: yes\n")
+    def fake_run(_command: list[str]) -> CommandStatus:
+        return CommandStatus(0, stdout="Controller AA:BB\n    Powered: yes\n")
 
-    monkeypatch.setattr(bluetooth.sys, "platform", "linux")
-    monkeypatch.setattr(bluetooth, "run_status_command", fake_run)
+    monkeypatch.setattr(linux, "run_status_command", fake_run)
 
-    status = bluetooth.bluetooth_status()
+    status = linux.bluetooth_status()
 
     assert status.ready
     assert "powered on" in status.detail
 
 
 def test_macos_bluetooth_status_reports_powered_off(monkeypatch: Any) -> None:
-    def fake_run(command: list[str]) -> bluetooth.CommandStatus:
+    def fake_run(command: list[str]) -> CommandStatus:
         if command[0] == "defaults":
-            return bluetooth.CommandStatus(0, stdout="0\n")
-        return bluetooth.CommandStatus(1, stderr="should not be called")
+            return CommandStatus(0, stdout="0\n")
+        return CommandStatus(1, stderr="should not be called")
 
-    monkeypatch.setattr(bluetooth.sys, "platform", "darwin")
-    monkeypatch.setattr(bluetooth, "run_status_command", fake_run)
+    monkeypatch.setattr(macos, "run_status_command", fake_run)
 
-    status = bluetooth.bluetooth_status()
+    status = macos.bluetooth_status()
 
     assert not status.ready
     assert "powered off" in status.detail
@@ -416,12 +434,12 @@ def test_gamepad_retry_refreshes_joystick_snapshot_after_initial_absence(monkeyp
     monkeypatch.setitem(sys.modules, "pygame", fake_pygame)
     pad = GamepadProfile.load("dualsense")
 
-    pygame_mod, joystick, issue = controller.try_init_gamepad(pad)
+    pygame_mod, joystick, issue = gamepad_input.try_init_gamepad(pad)
     assert pygame_mod is None
     assert joystick is None
     assert issue == "No gamepad detected"
 
-    pygame_mod, joystick, issue = controller.try_init_gamepad(pad)
+    pygame_mod, joystick, issue = gamepad_input.try_init_gamepad(pad)
 
     assert pygame_mod is fake_pygame
     assert joystick is fake_pygame.joystick.device

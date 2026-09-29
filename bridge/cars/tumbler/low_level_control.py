@@ -5,10 +5,9 @@ from __future__ import annotations
 import asyncio
 from typing import Any, Callable, Protocol
 
-from .port_map import port_id
-from .profiles import ModelProfile
-from .safety import SafetyLimits, clamp_signed
-from .transport import (
+from ...port_map import port_id
+from ...safety import SafetyLimits, clamp_signed
+from ...transport import (
     ATTACHED_IO_VIRTUAL,
     FEEDBACK_IDLE,
     MSG_ATTACHED_IO,
@@ -18,6 +17,7 @@ from .transport import (
     MSG_PORT_OUTPUT_FEEDBACK,
     MSG_PORT_VALUE,
 )
+from ..model_profiles import ModelProfile
 
 # VmCommands: 0=LoadProgram 1=StartLoadedProgram 2=StopLoadedProgram 3=SetGlobalRegisterVariable
 # 4=SubscribeToRegisterVariable 5=Unsubscribe 6=SetProgramToAutoStartOnBoot 7=VmProgramCrcCheck

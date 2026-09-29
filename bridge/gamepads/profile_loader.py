@@ -1,20 +1,13 @@
-"""Model and gamepad profiles.
-
-The hub tells us its topology — which port is a drive motor, which is the Play VM — so ports are
-never configured. What it does NOT tell us is what the command bits MEAN: that lives in the VM
-program and in the app, and differs per model. 0x04 is lights-off on the Porsche and boost on the
-Tumbler. So the bit map has to come from a profile, and getting it wrong moves the car.
-"""
+"""Data-backed gamepad profile loading and matching."""
 
 from __future__ import annotations
 
 import json
 from typing import Any
 
-from . import paths
+from .. import paths
 
 CONFIG_DIR = paths.CONFIG_DIR
-PORT_MAP_PATH = paths.PORT_MAP_PATH
 AUTO_GAMEPAD_PROFILE = "auto"
 AUTO_GAMEPAD_CANDIDATES = ("dualsense", "steamdeck", "generic_sdl")
 
@@ -35,56 +28,17 @@ def _load(kind: str, name: str) -> dict[str, Any]:
     return loaded
 
 
-class ModelProfile:
-    """Per-model command semantics. Missing keys raise rather than defaulting to something plausible."""
-
-    def __init__(self, data: dict[str, Any], name: str) -> None:
-        """Read one model profile; missing keys raise here rather than at drive time."""
-        self.name: str = data["name"]
-        self.program_id: int = data["program_id"]
-        self._control: dict[str, int] = data["control"]
-        self._control2: dict[str, int] = data["control2"]
-        self._pace: dict[str, float] = data["calibration_pace_s"]
-        self._boost: dict[str, float] | None = data.get("boost")
-        self.max_drive: int = data["limits"]["drive"]
-        self.max_steering: int = data["limits"]["steering"]
-
-    @classmethod
-    def load(cls, name: str) -> "ModelProfile":
-        """Load config/models/<name>.json."""
-        return cls(_load("models", name), name)
-
-    def bit(self, action: str) -> int:
-        """Control-byte bit for an action, or an error naming what this model has."""
-        return int(_need(self._control, action, self.name, "control bit"))
-
-    def bit2(self, action: str) -> int:
-        """Second control byte bit (lights and effects)."""
-        return int(_need(self._control2, action, self.name, "control2 bit"))
-
-    def pace(self, step: str) -> float:
-        """Seconds to hold before the next calibration command."""
-        return float(_need(self._pace, step, self.name, "calibration pace"))
-
-    @property
-    def boost(self) -> dict[str, float]:
-        """Boost hold and cooldown timings."""
-        if self._boost is None:
-            raise RuntimeError(f"{self.name} has no boost")
-        return self._boost
-
-
 class GamepadProfile:
     """Button and axis indices for one controller."""
 
     def __init__(self, data: dict[str, Any], name: str) -> None:
         """Read one gamepad profile."""
+        self.profile_id = name
         self.name: str = data["name"]
         self.buttons: dict[str, int] = data["buttons"]
         self.axes: dict[str, int] = data["axes"]
         self.deadzone: float = data["deadzone"]
         self.trigger_deadzone: float = data.get("trigger_deadzone", self.deadzone)
-        # Measured for this pad, not sniffed at runtime: DualSense triggers idle at -1.0.
         self.triggers_rest_negative: bool = data["triggers_rest_negative"]
         self.supports_led: bool = bool(data.get("supports_led", False))
         self.controls: str = data["controls"]

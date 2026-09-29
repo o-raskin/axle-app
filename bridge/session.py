@@ -3,56 +3,49 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Iterable
 from contextlib import suppress
 from dataclasses import dataclass
 from typing import Any
 
 from .audio import ReverseBeep, reverse_beep_status
-from .bluetooth import bluetooth_status
-from .controller import (
-    axis_to_percent,
-    button_held,
-    poll_controller_events,
-    read_drive_state,
-    read_trigger_pressures,
-    try_init_gamepad,
-)
+from .cars.model_profiles import DEFAULT_REQUIRED_PORT_ROLES, ModelProfile, ModelProfileChoice, available_model_choices
+from .cars.tumbler.low_level_control import LowLevelControl
+from .cars.tumbler.runtime import TumblerDriveRuntime
 from .dashboard import CarTelemetry, LiveConsole, SetupConsole
 from .feedback import (
     BoostRumble,
-    BoostUnavailableFeedback,
     ControllerLed,
-    CrashLockout,
     boost_led_color,
     boost_led_feedback_active,
     boost_rumble_strength,
-    change_speed_mode_with_feedback,
     drive_rumble_strength,
     update_gamepad_led,
 )
+from .gamepads.input import (
+    button_held,
+    poll_controller_events,
+    try_init_gamepad,
+)
+from .gamepads.profile_loader import GamepadProfile, gamepad_profile_candidates
 from .hub_probe import save_probe_outputs, scan_hub
-from .keyboard import TerminalExitPoller
-from .lighting import AttackSignal, AutomaticLights
-from .low_level_control import LowLevelControl
+from .keyboard import TerminalExitPoller, TerminalKeyPoller
 from .paths import HUB_SCHEME_PATH, PORT_MAP_PATH
-from .platform import release_winrt_sta_for_pygame
+from .platforms.current import bluetooth_status, release_winrt_sta_for_pygame
 from .port_map import load_port_map, port_id
-from .profiles import GamepadProfile, ModelProfile, gamepad_profile_candidates
 from .safety import SafetyLimits
 from .settings import (
-    BOOST_FEEDBACK_DELAY_S,
-    CRASH_LOCKOUT_S,
     CRASH_RUMBLE_STRENGTH,
-    DEFAULT_SPEED_MODE,
     LOOP_INTERVAL_S,
     RECONNECT_DUALSENSE,
     RECONNECT_HUB,
     SESSION_EXIT,
-    SPEED_MODE_RATIOS,
-    SPEED_RUMBLE_DURATION_MS,
     STARTUP_RETRY_DELAY_S,
 )
 from .transport import DEFAULT_HUB_NAME, TechnicMoveHub
+
+DEFAULT_MODEL_PROFILE = "tumbler"
+MODEL_SELECTION_POLL_INTERVAL_S = 0.05
 
 
 @dataclass(frozen=True)
@@ -95,6 +88,45 @@ def startup_steps(dualsense: bool, hub: bool, ready: bool, bluetooth: bool = Tru
     ]
 
 
+def model_selection_steps(gamepad_ready: bool) -> list[tuple[str, bool]]:
+    """Checklist for the model-selection screen."""
+    return [
+        ("Model profile selected", False),
+        ("Keyboard arrows ready", True),
+        ("Gamepad arrows ready", gamepad_ready),
+        ("Live drive session ready", False),
+    ]
+
+
+def model_selection_detail(
+    choices: list[ModelProfileChoice],
+    selected_index: int,
+    gamepad_detail: str,
+) -> str:
+    """Render the selectable model list for the setup panel detail area."""
+    lines = ["Keyboard: Up/Down + Enter | Gamepad: D-pad Up/Down + A/Cross"]
+    for index, choice in enumerate(choices):
+        marker = ">" if index == selected_index else " "
+        lines.append(f"{marker} {choice.profile_id:<16} {choice.name}")
+    lines.append(f"Gamepad: {gamepad_detail}")
+    return "\n".join(lines)
+
+
+def apply_model_selection_action(selected_index: int, choice_count: int, action: str | None) -> tuple[int, bool, bool]:
+    """Apply one model-selection action and return index, confirmed, cancelled."""
+    if choice_count <= 0:
+        raise RuntimeError("No model profiles are available")
+    if action == "up":
+        return (selected_index - 1) % choice_count, False, False
+    if action == "down":
+        return (selected_index + 1) % choice_count, False, False
+    if action == "confirm":
+        return selected_index, True, False
+    if action == "cancel":
+        return selected_index, False, True
+    return selected_index, False, False
+
+
 def try_init_gamepad_candidates(profiles: list[GamepadProfile]) -> tuple[GamepadConnection | None, str]:
     """Try all allowed gamepad profiles once, returning either a match or combined diagnostics."""
     issues = []
@@ -104,6 +136,100 @@ def try_init_gamepad_candidates(profiles: list[GamepadProfile]) -> tuple[Gamepad
             return GamepadConnection(pygame_mod, joystick, profile), ""
         issues.append(f"{profile.name}: {issue}")
     return None, "; ".join(issues)
+
+
+async def select_model_for_startup(
+    setup: SetupConsole,
+    profiles: list[GamepadProfile],
+    preferred_model: str = DEFAULT_MODEL_PROFILE,
+) -> str:
+    """Let the user choose a model profile with keyboard or gamepad navigation."""
+    choices = available_model_choices()
+    selected_index = next((index for index, choice in enumerate(choices) if choice.profile_id == preferred_model), 0)
+    gamepad: GamepadConnection | None = None
+    gamepad_detail = "connect a gamepad for D-pad selection"
+    next_gamepad_check = 0.0
+    previous_up = False
+    previous_down = False
+    previous_confirm = False
+    loop = asyncio.get_running_loop()
+
+    try:
+        with TerminalKeyPoller() as keys:
+            while True:
+                now = loop.time()
+                if gamepad is None and now >= next_gamepad_check:
+                    gamepad, issue = try_init_gamepad_candidates(profiles)
+                    if gamepad is None:
+                        gamepad_detail = f"waiting ({issue})" if issue else "waiting"
+                    else:
+                        gamepad_detail = f"ready: {gamepad.joystick.get_name()} ({gamepad.profile.name})"
+                    next_gamepad_check = now + STARTUP_RETRY_DELAY_S
+
+                action = keys.poll_action()
+                if action is None and gamepad is not None:
+                    action, previous_up, previous_down, previous_confirm = _gamepad_model_selection_action(
+                        gamepad,
+                        previous_up,
+                        previous_down,
+                        previous_confirm,
+                    )
+                    if action == "disconnected":
+                        with suppress(Exception):
+                            gamepad.pygame_mod.quit()
+                        gamepad = None
+                        gamepad_detail = "disconnected; keyboard still works"
+                        previous_up = False
+                        previous_down = False
+                        previous_confirm = False
+                        action = None
+
+                selected_index, confirmed, cancelled = apply_model_selection_action(
+                    selected_index,
+                    len(choices),
+                    action,
+                )
+                setup.show(
+                    "Choose LEGO Technic model",
+                    "Select the car profile to drive.",
+                    model_selection_steps(gamepad is not None),
+                    model_selection_detail(choices, selected_index, gamepad_detail),
+                )
+                if confirmed:
+                    return choices[selected_index].profile_id
+                if cancelled:
+                    raise RuntimeError("Model selection cancelled")
+                await asyncio.sleep(MODEL_SELECTION_POLL_INTERVAL_S)
+    finally:
+        if gamepad is not None:
+            with suppress(Exception):
+                gamepad.pygame_mod.quit()
+
+
+def _gamepad_model_selection_action(
+    gamepad: GamepadConnection,
+    previous_up: bool,
+    previous_down: bool,
+    previous_confirm: bool,
+) -> tuple[str | None, bool, bool, bool]:
+    """Return one edge-triggered gamepad menu action."""
+    disconnected, _exit_requested = poll_controller_events(gamepad.pygame_mod, gamepad.joystick)
+    if disconnected:
+        return "disconnected", previous_up, previous_down, previous_confirm
+
+    up = button_held(gamepad.joystick, gamepad.profile.button("speed_up"))
+    down = button_held(gamepad.joystick, gamepad.profile.button("speed_down"))
+    confirm_button = gamepad.profile.optional_button("confirm")
+    confirm = confirm_button is not None and button_held(gamepad.joystick, confirm_button)
+
+    action = None
+    if up and not previous_up:
+        action = "up"
+    elif down and not previous_down:
+        action = "down"
+    elif confirm and not previous_confirm:
+        action = "confirm"
+    return action, up, down, confirm
 
 
 async def wait_for_gamepad(
@@ -244,9 +370,13 @@ async def prepare_port_map_for_drive(
     return await scan_port_map_for_drive(setup, hub_name, hub_address)
 
 
-def required_hub_port_issue(hub: TechnicMoveHub, port_map: dict[str, Any]) -> str | None:
+def required_hub_port_issue(
+    hub: TechnicMoveHub,
+    port_map: dict[str, Any],
+    required_port_roles: Iterable[str] | None = None,
+) -> str | None:
     """Return a user-facing issue when the connected hub does not match the saved port map."""
-    for role in ("steering", "drive_left", "drive_right", "play_vm"):
+    for role in tuple(required_port_roles or DEFAULT_REQUIRED_PORT_ROLES):
         try:
             port = port_id(port_map, role)
         except RuntimeError as exc:
@@ -263,6 +393,7 @@ async def connect_hub_for_drive(
     port_map: dict[str, Any],
     hub_name_override: str | None = None,
     hub_address_override: str | None = None,
+    required_port_roles: Iterable[str] | None = None,
 ) -> TechnicMoveHub:
     """Connect and validate one hub attempt against the saved drive port map."""
     hub_name = hub_name_override or port_map["hub"]["name"]
@@ -271,7 +402,10 @@ async def connect_hub_for_drive(
     try:
         await hub.connect()
         await hub.wait_for_topology()
-        issue = required_hub_port_issue(hub, port_map)
+        if required_port_roles is None:
+            issue = required_hub_port_issue(hub, port_map)
+        else:
+            issue = required_hub_port_issue(hub, port_map, required_port_roles)
         if issue is not None:
             raise HubPortMismatch(issue)
         return hub
@@ -287,6 +421,8 @@ async def wait_for_hub(
     reconnect: bool = False,
     hub_name_override: str | None = None,
     hub_address_override: str | None = None,
+    *,
+    required_port_roles: Iterable[str] | None = None,
 ) -> TechnicMoveHub | None:
     """Wait until the Technic hub is online and matches the saved port map."""
     hub_name = hub_name_override or port_map["hub"]["name"]
@@ -308,7 +444,7 @@ async def wait_for_hub(
             detail,
         )
         try:
-            hub = await connect_hub_for_drive(port_map, hub_name, hub_address)
+            hub = await connect_hub_for_drive(port_map, hub_name, hub_address, required_port_roles)
             setup.show(
                 "Car ready",
                 f"Hub connected: {hub.hub_name}. Required ports are online.",
@@ -337,6 +473,8 @@ async def wait_for_drive_hardware(
     profiles: list[GamepadProfile],
     reconnect_reason: str | None = None,
     hub_target: HubTarget | None = None,
+    *,
+    required_port_roles: Iterable[str] | None = None,
 ) -> tuple[GamepadProfile, ConnectedHardware] | None:
     """Connect the gamepad and Technic hub in parallel before arming live control."""
     controller_name = " / ".join(profile.name for profile in profiles)
@@ -362,7 +500,9 @@ async def wait_for_drive_hardware(
     try:
         while True:
             if hub is None and hub_task is None:
-                hub_task = asyncio.create_task(connect_hub_for_drive(port_map, hub_name, hub_address))
+                hub_task = asyncio.create_task(
+                    connect_hub_for_drive(port_map, hub_name, hub_address, required_port_roles)
+                )
                 await asyncio.sleep(0)
 
             if gamepad is None:
@@ -496,42 +636,18 @@ async def run_live_session(
         console.log(pad.controls)
         console.log("Ctrl+C, Esc, or Start/Menu: safe stop and exit")
 
-        brake_button = pad.button("brake")
-        boost_button = pad.button("boost")
-        speed_up_button = pad.button("speed_up")
-        speed_down_button = pad.button("speed_down")
-        front_lights_button = pad.button("front_lights")
-        attack_button = pad.button("attack")
         exit_button = pad.optional_button("exit")
-        steer_axis = pad.axis("steer")
-        boost_hold = model.boost["hold_s"]
-        boost_cooldown = model.boost["cooldown_s"]
-
-        lights = AutomaticLights()
-        attack_signal = AttackSignal()
-        boost_unavailable_feedback = BoostUnavailableFeedback()
-        crash_lockout = CrashLockout()
-        speed_mode = DEFAULT_SPEED_MODE
-        drive_rumble_paused_until = 0.0
-        front_lights_prev = False
-        attack_prev = False
-        speed_up_prev = False
-        speed_down_prev = False
-        boost_prev = False
-        boost_until = 0.0
-        boost_feedback_at = 0.0
-        boost_ready_at = 0.0
-        reverse_led_started_at: float | None = None
+        runtime = TumblerDriveRuntime(model, pad)
         last_cmd = None
         loop = asyncio.get_running_loop()
-        led_color = update_gamepad_led(gamepad_led, speed_mode, boost_feedback=False)
+        led_color = update_gamepad_led(gamepad_led, runtime.speed_mode, boost_feedback=False)
         console.start(
             CarTelemetry(
                 model_name=model.name,
                 hub_name=hub.hub_name,
                 max_drive=model.max_drive,
                 max_steering=model.max_steering,
-                speed_mode=speed_mode,
+                speed_mode=runtime.speed_mode,
                 led_color=led_color,
             )
         )
@@ -554,185 +670,78 @@ async def run_live_session(
                     break
 
                 now = loop.time()
-                crash_active = crash_lockout.active(now)
+                frame = await runtime.sample(joystick, control, now, console.log)
+                reverse_beep.update(frame.reverse_active, now)
 
-                brake_pressed = button_held(joystick, brake_button)
-                speed_up_pressed = button_held(joystick, speed_up_button)
-                speed_down_pressed = button_held(joystick, speed_down_button)
-                boost_pressed = button_held(joystick, boost_button)
-                front_lights_pressed = button_held(joystick, front_lights_button)
-                attack_pressed = button_held(joystick, attack_button)
-                brake = brake_pressed and not crash_active
-
-                if not crash_active and speed_up_pressed and not speed_up_prev:
-                    previous_speed_mode = speed_mode
-                    speed_mode = await change_speed_mode_with_feedback(joystick, speed_mode, 1)
-                    if speed_mode != previous_speed_mode:
-                        drive_rumble_paused_until = loop.time() + (SPEED_RUMBLE_DURATION_MS / 1000)
-                    ratio = int(SPEED_MODE_RATIOS[speed_mode] * 100)
-                    console.log(f"speed mode={speed_mode} trigger_to_power={ratio}%")
-                speed_up_prev = speed_up_pressed
-
-                if not crash_active and speed_down_pressed and not speed_down_prev:
-                    previous_speed_mode = speed_mode
-                    speed_mode = await change_speed_mode_with_feedback(joystick, speed_mode, -1)
-                    if speed_mode != previous_speed_mode:
-                        drive_rumble_paused_until = loop.time() + (SPEED_RUMBLE_DURATION_MS / 1000)
-                    ratio = int(SPEED_MODE_RATIOS[speed_mode] * 100)
-                    console.log(f"speed mode={speed_mode} trigger_to_power={ratio}%")
-                speed_down_prev = speed_down_pressed
-
-                if brake:
-                    throttle = 0
-                    trigger_pressure = 0.0
-                    forward_pressure, reverse_pressure = read_trigger_pressures(joystick, pad)
-                elif crash_active:
-                    throttle = 0
-                    trigger_pressure = 0.0
-                    forward_pressure = 0.0
-                    reverse_pressure = 0.0
-                else:
-                    throttle, trigger_pressure, forward_pressure, reverse_pressure = read_drive_state(
-                        joystick,
-                        pad,
-                        model.max_drive,
-                        speed_mode,
-                    )
-
-                status_reports = control.drain_status_reports()
-                crash_started = False
-                if status_reports:
-                    for _raw, status_flags in status_reports:
-                        crash_started = (
-                            crash_lockout.update(
-                                throttle,
-                                model.max_drive,
-                                now,
-                                impact="impact" in status_flags,
-                                enabled=not brake_pressed,
-                            )
-                            or crash_started
-                        )
-                else:
-                    crash_lockout.update(throttle, model.max_drive, now, impact=None, enabled=not brake_pressed)
-
-                if not crash_active and crash_started:
-                    crash_active = True
-                    throttle = 0
-                    trigger_pressure = 0.0
-                    forward_pressure = 0.0
-                    reverse_pressure = 0.0
-                    brake = False
-                    boost_until = 0.0
-                    boost_feedback_at = 0.0
-                    drive_rumble_paused_until = 0.0
-                    console.log(f"crash detected: controls locked for {CRASH_LOCKOUT_S:.1f}s")
-
-                if throttle < 0:
-                    if reverse_led_started_at is None:
-                        reverse_led_started_at = now
-                else:
-                    reverse_led_started_at = None
-                reverse_beep.update(throttle < 0, now)
-
-                if not crash_active and boost_pressed and not boost_prev and now >= boost_ready_at and not brake:
-                    boost_until = now + boost_hold
-                    boost_feedback_at = now + BOOST_FEEDBACK_DELAY_S
-                    boost_ready_at = boost_until + boost_cooldown
-                    console.log(f"boost fired, ready again in {boost_hold + boost_cooldown:.1f}s")
-                elif not crash_active and boost_pressed and not boost_prev:
-                    if brake:
-                        console.log("boost unavailable while braking")
-                    else:
-                        console.log(f"boost not ready ({boost_ready_at - now:.1f}s left)")
-                    boost_unavailable_feedback.trigger(joystick, now)
-                boost_prev = boost_pressed
-                if brake or crash_active:
-                    boost_until = 0.0
-                    boost_feedback_at = 0.0
-                boost = not crash_active and now < boost_until
-                boost_led_feedback = boost_led_feedback_active(boost_feedback_at, boost_until, now)
-                if crash_active:
+                boost_led_feedback = boost_led_feedback_active(frame.boost_feedback_at, frame.boost_until, now)
+                if frame.crash:
                     rumble_strength = CRASH_RUMBLE_STRENGTH
                     boost_rumble.update(joystick, rumble_strength)
                 else:
-                    rumble_strength = boost_rumble_strength(boost_feedback_at, boost_until, now)
-                    if rumble_strength > 0.0 or now >= drive_rumble_paused_until:
+                    rumble_strength = boost_rumble_strength(frame.boost_feedback_at, frame.boost_until, now)
+                    if rumble_strength > 0.0 or now >= frame.drive_rumble_paused_until:
                         if rumble_strength == 0.0:
-                            rumble_strength = drive_rumble_strength(trigger_pressure, speed_mode)
+                            rumble_strength = drive_rumble_strength(frame.trigger_pressure, frame.speed_mode)
                         boost_rumble.update(joystick, rumble_strength)
                 led_color = update_gamepad_led(
                     gamepad_led,
-                    speed_mode,
+                    frame.speed_mode,
                     boost_led_feedback,
-                    boost_color=boost_led_color(boost_feedback_at, boost_until, now),
-                    boost_unavailable_feedback=boost_unavailable_feedback,
-                    crash_feedback=crash_active,
-                    reverse_started_at=reverse_led_started_at,
+                    boost_color=boost_led_color(frame.boost_feedback_at, frame.boost_until, now),
+                    boost_unavailable_feedback=runtime.boost_unavailable_feedback,
+                    crash_feedback=frame.crash,
+                    reverse_started_at=frame.reverse_led_started_at,
                     now=now,
                 )
 
-                if not crash_active and front_lights_pressed and not front_lights_prev:
-                    lights.toggle_front_lights()
-                front_lights_prev = front_lights_pressed
-
-                if not crash_active and attack_pressed and not attack_prev:
-                    attack_signal.trigger(now)
-                attack_prev = attack_pressed
-
-                flicker = False if crash_active else attack_signal.is_active(now)
-                front_lights_on, rocket_lights_on = (False, False) if crash_active else lights.state_for(throttle, now)
-
-                steering = 0
-                if not crash_active:
-                    steering = axis_to_percent(joystick.get_axis(steer_axis), model.max_steering, pad.deadzone)
                 console.update(
                     CarTelemetry(
                         model_name=model.name,
                         hub_name=hub.hub_name,
                         max_drive=model.max_drive,
                         max_steering=model.max_steering,
-                        throttle=throttle,
-                        steering=steering,
-                        speed_mode=speed_mode,
-                        trigger_pressure=trigger_pressure,
-                        forward_pressure=forward_pressure,
-                        reverse_pressure=reverse_pressure,
-                        brake=brake,
-                        boost=boost,
-                        boost_ready_in=max(0.0, boost_ready_at - now),
-                        crash=crash_active,
-                        crash_lockout_left=crash_lockout.remaining(now),
-                        front_lights_on=front_lights_on,
-                        manual_front_lights_on=lights.front_lights_manual_on,
-                        rocket_lights_on=rocket_lights_on,
-                        flicker=flicker,
+                        throttle=frame.throttle,
+                        steering=frame.steering,
+                        speed_mode=frame.speed_mode,
+                        trigger_pressure=frame.trigger_pressure,
+                        forward_pressure=frame.forward_pressure,
+                        reverse_pressure=frame.reverse_pressure,
+                        brake=frame.brake,
+                        boost=frame.boost,
+                        boost_ready_in=frame.boost_ready_in,
+                        crash=frame.crash,
+                        crash_lockout_left=frame.crash_lockout_left,
+                        front_lights_on=frame.front_lights_on,
+                        manual_front_lights_on=frame.manual_front_lights_on,
+                        rocket_lights_on=frame.rocket_lights_on,
+                        flicker=frame.flicker,
                         led_color=led_color,
                         rumble_strength=rumble_strength,
-                        reverse_beep=reverse_beep_status(reverse_beep, throttle < 0, now),
-                        speed_up_pressed=speed_up_pressed and not crash_active,
-                        speed_down_pressed=speed_down_pressed and not crash_active,
-                        boost_pressed=boost_pressed and not crash_active,
-                        front_lights_pressed=front_lights_pressed and not crash_active,
-                        attack_pressed=attack_pressed and not crash_active,
+                        reverse_beep=reverse_beep_status(reverse_beep, frame.reverse_active, now),
+                        speed_up_pressed=frame.speed_up_pressed,
+                        speed_down_pressed=frame.speed_down_pressed,
+                        boost_pressed=frame.boost_pressed,
+                        front_lights_pressed=frame.front_lights_pressed,
+                        attack_pressed=frame.attack_pressed,
                     )
                 )
 
-                cmd = (throttle, steering, brake, boost, front_lights_on, rocket_lights_on, flicker)
+                cmd = frame.command
                 if cmd != last_cmd:
                     console.log(
-                        f"cmd speed={throttle} steer={steering} brake={brake} "
-                        f"boost={boost} mode={speed_mode} "
-                        f"front_lights={front_lights_on} rocket_lights={rocket_lights_on} flicker={flicker}"
+                        f"cmd speed={frame.throttle} steer={frame.steering} brake={frame.brake} "
+                        f"boost={frame.boost} mode={frame.speed_mode} "
+                        f"front_lights={frame.front_lights_on} "
+                        f"rocket_lights={frame.rocket_lights_on} flicker={frame.flicker}"
                     )
                     await control.drive(
-                        throttle,
-                        steering,
-                        brake=brake,
-                        boost=boost,
-                        lights=front_lights_on,
-                        rocket_lights=rocket_lights_on,
-                        flicker=flicker,
+                        frame.throttle,
+                        frame.steering,
+                        brake=frame.brake,
+                        boost=frame.boost,
+                        lights=frame.front_lights_on,
+                        rocket_lights=frame.rocket_lights_on,
+                        flicker=frame.flicker,
                     )
                     last_cmd = cmd
                 await asyncio.sleep(LOOP_INTERVAL_S)
@@ -756,7 +765,7 @@ async def run_live_session(
 
 
 async def run_control(
-    model_name: str,
+    model_name: str | None,
     gamepad_name: str,
     hub_name: str = DEFAULT_HUB_NAME,
     hub_address: str | None = None,
@@ -764,8 +773,9 @@ async def run_control(
     """Run the guided live-control flow for one model and gamepad profile."""
     setup = SetupConsole()
     try:
-        model = ModelProfile.load(model_name)
         pad_candidates = gamepad_profile_candidates(gamepad_name)
+        selected_model_name = model_name or await select_model_for_startup(setup, pad_candidates)
+        model = ModelProfile.load(selected_model_name)
     except RuntimeError as exc:
         setup.show(
             "Profile configuration problem",
@@ -786,6 +796,7 @@ async def run_control(
             pad_candidates,
             reconnect_reason=reconnect_reason,
             hub_target=HubTarget(hub_name, hub_address),
+            required_port_roles=model.required_port_roles,
         )
         if hardware_result is None:
             return

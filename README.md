@@ -35,6 +35,20 @@ Highlights:
 Keep the wheels off the ground the first time you run live control. Once Bluetooth, the gamepad, and
 the hub are ready, live control starts automatically and can move the model immediately.
 
+## Project Structure
+
+The runtime is split around the extension points that change between hardware setups:
+
+- `bridge/gamepads/`: gamepad profiles, SDL/Pygame discovery, diagnostics, and normalized input.
+- `bridge/gamepads/dualsense.py`, `steamdeck_gamepad.py`, `generic_sdl.py`: gamepad-specific entry points.
+- `bridge/platforms/macos.py`, `linux.py`, `steamdeck_platform.py`, `windows.py`: target-specific platform hooks.
+- `bridge/cars/`: car model profiles and car-specific command behavior.
+- `bridge/cars/tumbler/`: all Tumbler-specific PLAYVM control, lights, boost, crash lockout, and per-frame runtime state.
+
+New gamepads should be added as JSON profiles under `config/gamepads/` plus a specific module under
+`bridge/gamepads/` when SDL needs special handling. New LEGO Technic cars should get their model JSON
+under `config/models/` and any car-specific runtime package under `bridge/cars/<car_name>/`.
+
 ## Requirements
 
 - macOS with a Sony DualSense controller, or Steam Deck/Linux x86_64 with Steam Input/Xbox-style controls
@@ -70,9 +84,10 @@ xattr -dr com.apple.quarantine ./lego-technic-gamepad-bridge
 ./lego-technic-gamepad-bridge
 ```
 
-The release executable starts the guided live-control flow by default. If this machine does not have
-a saved car port map yet, the bridge scans the hub first, saves the result, and continues startup.
-The scan does not move the model.
+The release executable starts the guided live-control flow by default. Startup first asks which model
+profile to drive. Use keyboard Up/Down + Enter, or gamepad D-pad Up/Down + A/Cross, to choose. If
+this machine does not have a saved car port map yet, the bridge scans the hub first, saves the
+result, and continues startup. The scan does not move the model.
 
 Release runtime files are stored under:
 
@@ -86,7 +101,8 @@ Set `LEGO_BRIDGE_HOME=/some/path` before launch to use a different runtime state
 Useful release commands:
 
 ```bash
-./lego-technic-gamepad-bridge             # guided live control; scans first if needed
+./lego-technic-gamepad-bridge             # choose model, then guided live control
+./lego-technic-gamepad-bridge --model tumbler
 ./lego-technic-gamepad-bridge --scan-hub  # refresh the saved hub port map without driving
 ./lego-technic-gamepad-bridge --probe     # show gamepad axes/buttons, no hub
 ./lego-technic-gamepad-bridge --gamepad-devices
@@ -185,11 +201,12 @@ calibration, opens the selected gamepad, and prints each changed command sent to
 `Ctrl+C`, `Esc`, or the controller Start/Menu button for safe motor stop, LED cleanup, BLE
 disconnect, and pygame shutdown.
 
-Startup is guided. The bridge first confirms Bluetooth is enabled, then waits for a supported
-gamepad. On Steam Deck, the built-in Steam Input controller should be detected by `--gamepad auto`;
-if SDL reports an unexpected controller name, the generic SDL fallback is used. Then it waits for the
-car and asks you to press the Technic Move Hub power/connect button so the hub starts advertising.
-When the checklist is complete, live control starts automatically.
+Startup is guided. If `--model` is not passed, startup opens a model selector; use keyboard Up/Down +
+Enter, or gamepad D-pad Up/Down + A/Cross. The bridge then confirms Bluetooth is enabled and waits
+for a supported gamepad. On Steam Deck, the built-in Steam Input controller should be detected by
+`--gamepad auto`; if SDL reports an unexpected controller name, the generic SDL fallback is used.
+Then it waits for the car and asks you to press the Technic Move Hub power/connect button so the hub
+starts advertising. When the checklist is complete, live control starts automatically.
 
 During live control, a cockpit-style terminal panel stays above the event log. It shows a drive-power
 speedometer, steering meter, separate L2/R2 trigger bars, speed-mode selector, live button states,
@@ -212,6 +229,7 @@ cleanup, and returns to the matching reconnect screen instead of crashing with a
 | R1 | Boost, when ready and not braking. |
 | Square | Toggle front lights manually when stopped. Forward and reverse motion override it. |
 | Circle | Trigger the one-second flicker/attack signal. |
+| Cross / X | Confirm model selection during startup. |
 | Options / Esc | Safe exit. |
 
 ## Steam Deck Controls
@@ -227,6 +245,7 @@ cleanup, and returns to the matching reconnect screen instead of crashing with a
 | RB | Boost, when ready and not braking. |
 | X | Toggle front lights manually when stopped. |
 | B | Trigger the one-second flicker/attack signal. |
+| A | Confirm model selection during startup. |
 | Menu / Start | Safe exit. |
 
 ## DualSense Feedback

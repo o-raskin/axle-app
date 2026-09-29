@@ -31,22 +31,9 @@ from bridge.audio import (
     select_dualsense_coreaudio_device,
     select_forced_coreaudio_device,
 )
-from bridge.controller import (
-    axis_to_percent,
-    button_held,
-    gamepad_diagnostics,
-    gamepad_name_is_dualsense,
-    gamepad_was_disconnected,
-    init_gamepad,
-    read_drive_input,
-    read_drive_state,
-    read_throttle,
-    read_trigger_pressures,
-    run_probe,
-    snapshot,
-    trigger_amount,
-    try_init_gamepad,
-)
+from bridge.cars.model_profiles import ModelProfile
+from bridge.cars.tumbler.effects import AttackSignal, AutomaticLights
+from bridge.cars.tumbler.low_level_control import LowLevelControl
 from bridge.dashboard import (
     CarTelemetry,
     LiveConsole,
@@ -95,13 +82,27 @@ from bridge.feedback import (
     stop_rumble,
     update_gamepad_led,
 )
+from bridge.gamepads.input import (
+    axis_to_percent,
+    button_held,
+    gamepad_diagnostics,
+    gamepad_name_is_dualsense,
+    gamepad_was_disconnected,
+    init_gamepad,
+    read_drive_input,
+    read_drive_state,
+    read_throttle,
+    read_trigger_pressures,
+    run_probe,
+    snapshot,
+    trigger_amount,
+    try_init_gamepad,
+)
+from bridge.gamepads.profile_loader import GamepadProfile, gamepad_profile_candidates
 from bridge.hub_probe import save_probe_outputs, scan_hub
-from bridge.lighting import AttackSignal, AutomaticLights
-from bridge.low_level_control import LowLevelControl
 from bridge.paths import HUB_SCHEME_PATH, PORT_MAP_PATH, REVERSE_BEEP_PATH
-from bridge.platform import configure_process_for_platform
+from bridge.platforms.current import configure_process_for_platform
 from bridge.port_map import load_port_map, port_id
-from bridge.profiles import GamepadProfile, ModelProfile, gamepad_profile_candidates
 from bridge.safety import SafetyLimits, require_user_acknowledgement
 from bridge.session import (
     ConnectedHardware,
@@ -113,6 +114,7 @@ from bridge.session import (
     run_live_session,
     safe_shutdown,
     scan_port_map_for_drive,
+    select_model_for_startup,
     startup_steps,
     wait_for_bluetooth,
     wait_for_drive_hardware,
@@ -330,6 +332,7 @@ __all__ = [
     "select_dualsense_audio_device",
     "select_dualsense_coreaudio_device",
     "select_forced_coreaudio_device",
+    "select_model_for_startup",
     "snapshot",
     "speed_mode_selector",
     "startup_steps",
@@ -370,7 +373,7 @@ async def main() -> None:
         action="store_true",
         help="List audio outputs and selected reverse beep device",
     )
-    parser.add_argument("--model", default="tumbler", help="Model profile in config/models/")
+    parser.add_argument("--model", default=None, help="Model profile in config/models/; skips startup selector")
     parser.add_argument("--gamepad", default="auto", help="Gamepad profile in config/gamepads/ or 'auto'")
     parser.add_argument("--name", default=DEFAULT_HUB_NAME, help="Technic hub name to scan/connect")
     parser.add_argument("--address", default=None, help="Exact BLE address for a specific Technic hub")

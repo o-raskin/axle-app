@@ -7,9 +7,10 @@ from pathlib import Path
 
 import pytest
 
-from bridge.low_level_control import LowLevelControl, decode_vm_status, decode_vm_status_report
+from bridge.cars.model_profiles import ModelProfile
+from bridge.cars.tumbler.low_level_control import LowLevelControl, decode_vm_status, decode_vm_status_report
+from bridge.gamepads.profile_loader import GamepadProfile
 from bridge.port_map import load_port_map, port_id, save_port_map
-from bridge.profiles import GamepadProfile, ModelProfile
 from bridge.safety import SafetyLimits
 from gamepad_bridge import (
     ATTACK_SIGNAL_DURATION_S,

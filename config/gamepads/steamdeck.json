@@ -15,6 +15,7 @@
     "boost": 10,
     "speed_up": 11,
     "speed_down": 12,
+    "confirm": 0,
     "front_lights": 2,
     "attack": 1,
     "exit": 6

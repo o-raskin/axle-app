@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .settings import ATTACK_SIGNAL_DURATION_S, FRONT_LIGHTS_OFF_DELAY_S, ROCKET_LIGHTS_BLINK_INTERVAL_S
+from ...settings import ATTACK_SIGNAL_DURATION_S, FRONT_LIGHTS_OFF_DELAY_S, ROCKET_LIGHTS_BLINK_INTERVAL_S
 
 
 @dataclass

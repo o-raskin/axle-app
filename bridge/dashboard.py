@@ -281,7 +281,8 @@ def render_setup_panel(
         mark = "OK" if done else ".."
         lines.append(line(f"  [{mark}] {label}"))
     if detail:
-        lines.extend([line(), line(detail)])
+        lines.append(line())
+        lines.extend(line(detail_line) for detail_line in detail.splitlines())
     lines.extend([line(), line("Press Ctrl+C to exit safely."), border])
     return "\n".join(lines)
 

@@ -6,9 +6,11 @@ import os
 import sys
 from typing import Any
 
-from .platform import STEAM_DECK_SDL_HINTS, configure_process_for_platform
-from .profiles import GamepadProfile
-from .settings import AXIS_REPORT_STEP, DUALSENSE_GAMEPAD_HINTS, NON_DUALSENSE_GAMEPAD_HINTS
+from ..platforms import steamdeck_platform
+from ..platforms.current import configure_process_for_platform
+from ..settings import AXIS_REPORT_STEP
+from . import dualsense
+from .profile_loader import GamepadProfile
 
 SDL_CONTROLLER_AXIS_MAX = 32767.0
 SDL_CONTROLLER_TRIGGER_AXES = {4, 5}
@@ -46,7 +48,7 @@ def read_drive_state(
     speed_mode: int,
 ) -> tuple[int, float, float, float]:
     """Return throttle, net trigger pressure, forward pressure and reverse pressure."""
-    from .feedback import drive_power_for_trigger  # noqa: PLC0415
+    from ..feedback import drive_power_for_trigger  # noqa: PLC0415
 
     forward, reverse = read_trigger_pressures(joystick, pad)
     trigger_balance = forward - reverse
@@ -73,10 +75,7 @@ def button_held(joystick: Any, index: int) -> bool:
 
 def gamepad_name_is_dualsense(name: str) -> bool:
     """Return whether a pygame joystick name looks like a DualSense controller."""
-    lowered = name.lower()
-    if any(hint in lowered for hint in NON_DUALSENSE_GAMEPAD_HINTS):
-        return False
-    return any(hint in lowered for hint in DUALSENSE_GAMEPAD_HINTS)
+    return dualsense.matches_device_name(name)
 
 
 class SdlGameControllerJoystick:
@@ -322,7 +321,7 @@ def gamepad_diagnostics() -> str:
         f"sdl={'.'.join(str(part) for part in pygame.get_sdl_version())}",
         f"pygame_file={getattr(pygame, '__file__', 'unknown')}",
     ]
-    lines.extend(f"{name}={os.environ.get(name, '')}" for name in sorted(STEAM_DECK_SDL_HINTS))
+    lines.extend(f"{name}={os.environ.get(name, '')}" for name in sorted(steamdeck_platform.SDL_HINTS))
 
     try:
         refresh_joystick_subsystem(pygame, init_all=False)
