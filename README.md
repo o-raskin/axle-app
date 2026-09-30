@@ -1,4 +1,4 @@
-# LEGO Technic Gamepad Bridge
+# Axle - LEGO Technic Gamepad Bridge
 
 Turn a Sony DualSense or Steam Deck controller into a tactile cockpit for a LEGO Technic Move Hub (88019).
 The current implementation is tuned for the LEGO Technic 42239 Batmobile Tumbler: analog drive,
