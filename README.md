@@ -87,7 +87,22 @@ chmod +x ./Axle-VERSION-linux-x86_64.AppImage
 ```
 
 The AppImage opens the Axle desktop UI and is shared by Linux and Steam Deck. The terminal archive
-provides the command-line interface for scripting and debugging. Current packages are unsigned.
+provides the command-line interface for scripting and debugging. The AppImage bundles its FUSE
+library; it does not require installing FUSE 2 on SteamOS. If mounting is unavailable, launch with
+`./Axle-VERSION-linux-x86_64.AppImage --appimage-extract-and-run`.
+
+macOS desktop builds are ad-hoc signed, with no paid Apple Developer ID or notarization. After
+copying Axle from the DMG to Applications, a downloaded app can still require a one-time Gatekeeper
+exception. For a download you trust (verify its checksum against `SHA256SUMS`), clear quarantine
+on that app only, then open it:
+
+```bash
+xattr -dr com.apple.quarantine /Applications/Axle.app
+open /Applications/Axle.app
+```
+
+This does not turn off Gatekeeper system-wide. The v0.1.13 DMG also had an invalid bundle signature;
+use a rebuilt release with the packaging fix rather than treating that error as download corruption.
 
 If macOS blocks a downloaded unsigned binary, remove the download quarantine and run it again:
 
@@ -228,8 +243,8 @@ their structured events.
 Desktop package commands:
 
 ```bash
-npm run dist:mac         # unsigned local macOS DMG + ZIP
-npm run dist:mac:signed  # signed macOS DMG + ZIP when certificates are configured
+npm run dist:mac         # ad-hoc signed macOS DMG + ZIP; no Apple credentials
+npm run dist:mac:signed  # Developer ID build with certificates and CSC_NAME configured
 npm run dist:win
 npm run dist:linux
 npm run dist:steamdeck

@@ -218,6 +218,9 @@ ui/electron/dist/
 ui/electron/release/
 ui/electron/out/
 ui/electron/*.tsbuildinfo
+# The generic Python `lib/` rule above must not hide renderer source modules.
+!ui/electron/src/renderer/src/lib/
+!ui/electron/src/renderer/src/lib/**
 
 # PyPI configuration file
 .pypirc

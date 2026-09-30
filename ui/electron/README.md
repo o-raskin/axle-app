@@ -77,8 +77,8 @@ development, or `npm run start` after `npm run build` to preview the packaged re
 Platform-specific package commands:
 
 ```bash
-npm run dist:mac         # unsigned macOS DMG + ZIP for local builds
-npm run dist:mac:signed  # signed macOS DMG + ZIP when certificates are configured
+npm run dist:mac         # ad-hoc signed macOS DMG + ZIP; no Apple credentials
+npm run dist:mac:signed  # Developer ID build with certificates and CSC_NAME configured
 npm run dist:win         # Windows NSIS installer
 npm run dist:linux       # Linux AppImage + deb
 npm run dist:steamdeck   # Linux x64 AppImage target for Steam Deck
@@ -86,15 +86,19 @@ npm run dist:steamdeck   # Linux x64 AppImage target for Steam Deck
 
 Build platform notes:
 
-- macOS release packaging should run on macOS. The default `dist:mac` command disables certificate
-  auto-discovery so local builds do not hang in signing; use `dist:mac:signed` for signed releases.
+- macOS release packaging runs on macOS. Default builds explicitly ad-hoc sign the full bundle,
+  including its frozen helper. Downloaded apps still need a Gatekeeper exception because these
+  builds have no Developer ID or notarization; see the root README. `dist:mac:signed` overrides
+  that identity with `CSC_NAME` (or certificate discovery) when Apple credentials are configured.
 - Windows packaging runs on Windows x64 and produces an NSIS installer.
 - Linux and Steam Deck AppImage builds should run on Linux x86_64 for runtime compatibility.
 
 Every package includes the frozen Python runtime, SDL, profiles and beep audio in `resources/bridge`.
 The packaging hook rejects cross-compilation or a missing bridge. Packaged apps never discover
 system Python or source checkouts; writable bridge files are stored under Electron's user-data
-directory. Linux and Steam Deck share one x64 AppImage. Current CI packages are unsigned.
+directory. Linux and Steam Deck share one x64 AppImage with a static FUSE runtime, avoiding a host
+FUSE 2 dependency. CI launches the actual AppImage in mounted and extract-and-run modes. macOS CI
+verifies bundle signatures and launches both the mounted DMG app and the extracted ZIP app.
 
 ## Using the Desktop App
 

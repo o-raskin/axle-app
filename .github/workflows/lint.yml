@@ -141,20 +141,17 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends xvfb libgtk-3-0 libnss3 libasound2 libgbm1 libfuse2
+          sudo apt-get install -y --no-install-recommends xvfb libgtk-3-0 libnss3 libasound2 libgbm1
       - name: Build Electron with bundled native runtime
         working-directory: ui/electron
         run: |
           npm version "$RELEASE_VERSION" --no-git-tag-version --allow-same-version
           npm run build
           npx --no-install electron-builder --${{ matrix.platform }} --${{ matrix.arch }} --publish never
-      - name: Verify macOS ZIP payload and DMG
+      - name: Verify macOS DMG and ZIP signatures and launch
         if: runner.os == 'macOS'
         working-directory: ui/electron
-        run: |
-          hdiutil verify "release/Axle-${RELEASE_VERSION}-mac-${{ matrix.arch }}.dmg"
-          ditto -x -k "release/Axle-${RELEASE_VERSION}-mac-${{ matrix.arch }}.zip" "$RUNNER_TEMP/axle-zip"
-          npm run test:package -- "$RUNNER_TEMP/axle-zip/Axle.app/Contents/MacOS/Axle"
+        run: node scripts/verify-macos.cjs
       - name: Install and verify Windows package
         if: runner.os == 'Windows'
         shell: pwsh
@@ -166,16 +163,18 @@ jobs:
           if ($install.ExitCode -ne 0) { throw "Installer failed: $($install.ExitCode)" }
           npm run test:package -- "$destination/Axle.exe"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      - name: Verify Linux and Steam Deck AppImage payload
+      - name: Verify Linux and Steam Deck AppImage launcher and deb
         if: runner.os == 'Linux'
         working-directory: ui/electron
         run: |
           appimage="$PWD/release/Axle-${RELEASE_VERSION}-linux-x86_64.AppImage"
           chmod +x "$appimage"
-          cd "$RUNNER_TEMP"
-          "$appimage" --appimage-extract >/dev/null
-          cd "$GITHUB_WORKSPACE/ui/electron"
-          xvfb-run --auto-servernum npm run test:package -- "$RUNNER_TEMP/squashfs-root/AppRun"
+          # Exercise the shipped runtime, both mounted and without a FUSE device.
+          # Extracting and launching AppRun alone hid launcher failures in v0.1.13.
+          sudo modprobe fuse
+          test -c /dev/fuse
+          xvfb-run --auto-servernum npm run test:package -- "$appimage"
+          APPIMAGE_EXTRACT_AND_RUN=1 xvfb-run --auto-servernum npm run test:package -- "$appimage"
           dpkg-deb --extract "release/Axle-${RELEASE_VERSION}-linux-amd64.deb" "$RUNNER_TEMP/axle-deb"
           xvfb-run --auto-servernum npm run test:package -- "$RUNNER_TEMP/axle-deb/opt/Axle/axle"
       - name: Stage archives and artifact manifest

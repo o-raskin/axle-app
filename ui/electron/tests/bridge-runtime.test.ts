@@ -1,10 +1,41 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { test } from "node:test";
 
-import { resolveBridgeLaunch } from "../src/main/bridgeRuntime";
+import { cleanupBridgeRuntimes, resolveBridgeLaunch } from "../src/main/bridgeRuntime";
+
+test("AppImage runs an identical private bridge copy outside the mount and cleans it up", () => {
+  const temporary = mkdtempSync(join(tmpdir(), "axle-appimage-runtime-"));
+  try {
+    const resourcesPath = join(temporary, "mounted", "resources");
+    const userDataPath = join(temporary, "user-data");
+    const source = join(resourcesPath, "bridge", "lego-technic-gamepad-bridge");
+    mkdirSync(dirname(source), { recursive: true });
+    writeFileSync(source, "frozen-bridge-code", { mode: 0o555 });
+    const options = {
+      isPackaged: true, platform: "linux" as const, resourcesPath, userDataPath,
+      environment: { APPIMAGE: "/downloads/Axle.AppImage", LEGO_BRIDGE_PYTHON: "/invalid/python" }
+    };
+    const launch = resolveBridgeLaunch(options, () => assert.fail("No source fallback"));
+    assert.notEqual(launch.command, source);
+    assert.equal(dirname(dirname(launch.command)), userDataPath);
+    assert.deepEqual(readFileSync(launch.command), readFileSync(source));
+    if (process.platform !== "win32") {
+      assert.equal(statSync(dirname(launch.command)).mode & 0o777, 0o700);
+      assert.equal(statSync(launch.command).mode & 0o777, 0o700);
+    }
+    assert.equal(resolveBridgeLaunch(options, () => assert.fail()).command, launch.command);
+    cleanupBridgeRuntimes();
+    assert.equal(existsSync(launch.command), false);
+    assert.equal(readFileSync(source, "utf8"), "frozen-bridge-code");
+    assert.equal(existsSync(userDataPath), true);
+  } finally {
+    cleanupBridgeRuntimes();
+    rmSync(temporary, { recursive: true, force: true });
+  }
+});
 
 for (const platform of ["darwin", "win32", "linux"] as const) {
   test(`packaged ${platform} launches its bundled bridge with writable storage and no Python`, () => {

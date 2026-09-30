@@ -1,7 +1,43 @@
-import { existsSync, mkdirSync } from "node:fs";
+import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 
 type SourceRuntime = { command: string; args: string[]; root: string };
+
+const appImageRuntimes = new Map<string, { directory: string; command: string }>();
+let cleanupRegistered = false;
+
+/** Remove only private copies created by this process, after the bridge has stopped. */
+export function cleanupBridgeRuntimes(): void {
+  for (const runtime of appImageRuntimes.values()) {
+    rmSync(runtime.directory, { recursive: true, force: true });
+  }
+  appImageRuntimes.clear();
+}
+
+function appImageBridge(source: string, userDataPath: string, filename: string): string {
+  const key = JSON.stringify([source, userDataPath]);
+  const existing = appImageRuntimes.get(key);
+  if (existing) return existing.command;
+
+  // SquashFUSE can return EINVAL for security.capability. PyInstaller correctly
+  // refuses to run when that check fails. Run an identical private copy on the
+  // user's filesystem; keep the bootloader's security checks intact.
+  const directory = mkdtempSync(join(userDataPath, ".bridge-runtime-"));
+  const command = join(directory, filename);
+  try {
+    copyFileSync(source, command);
+    chmodSync(command, 0o700);
+    appImageRuntimes.set(key, { directory, command });
+    if (!cleanupRegistered) {
+      process.once("exit", cleanupBridgeRuntimes);
+      cleanupRegistered = true;
+    }
+    return command;
+  } catch (error) {
+    rmSync(directory, { recursive: true, force: true });
+    throw error;
+  }
+}
 
 export type BridgeLaunch = {
   command: string;
@@ -30,11 +66,14 @@ export function resolveBridgeLaunch(
 
   if (options.isPackaged) {
     const filename = `lego-technic-gamepad-bridge${options.platform === "win32" ? ".exe" : ""}`;
-    const command = join(options.resourcesPath, "bridge", filename);
+    let command = join(options.resourcesPath, "bridge", filename);
     if (!existsSync(command)) {
       throw new Error("The bundled bridge is missing. Reinstall Axle from a complete release package.");
     }
     mkdirSync(options.userDataPath, { recursive: true });
+    if (options.platform === "linux" && options.environment.APPIMAGE) {
+      command = appImageBridge(command, options.userDataPath, filename);
+    }
     return {
       command,
       args: ["--frontend", "jsonl"],
