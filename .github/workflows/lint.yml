@@ -65,15 +65,16 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: '24'
+          node-version: '24.12.0'
           cache: npm
           cache-dependency-path: ui/electron/package-lock.json
       - run: npm ci
-      - name: Lint, unit tests and production renderer
-        run: |
-          npm run lint
-          npm test
-          npm run build
+      - name: Electron lint
+        run: npm run lint
+      - name: Electron unit tests
+        run: npm test
+      - name: Electron production renderer
+        run: npm run build
       - name: Install display dependencies
         run: |
           sudo apt-get update
@@ -121,7 +122,7 @@ jobs:
           cache-dependency-path: requirements*.txt
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: '24'
+          node-version: '24.12.0'
           cache: npm
           cache-dependency-path: ui/electron/package-lock.json
       - name: Install pinned build dependencies
