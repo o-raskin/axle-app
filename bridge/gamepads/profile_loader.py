@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass
 from typing import Any
 
 from .. import paths
@@ -10,6 +11,14 @@ from .. import paths
 CONFIG_DIR = paths.CONFIG_DIR
 AUTO_GAMEPAD_PROFILE = "auto"
 AUTO_GAMEPAD_CANDIDATES = ("dualsense", "steamdeck", "generic_sdl")
+
+
+@dataclass(frozen=True)
+class GamepadProfileChoice:
+    """One selectable gamepad profile shown by external frontends."""
+
+    profile_id: str
+    name: str
 
 
 def _need(mapping: dict[str, Any], key: str, owner: str, what: str) -> Any:
@@ -81,3 +90,14 @@ def gamepad_profile_candidates(name: str) -> list[GamepadProfile]:
     if name != AUTO_GAMEPAD_PROFILE:
         return [GamepadProfile.load(name)]
     return [GamepadProfile.load(candidate) for candidate in AUTO_GAMEPAD_CANDIDATES]
+
+
+def available_gamepad_choices() -> list[GamepadProfileChoice]:
+    """Return all gamepad profiles available under config/gamepads."""
+    choices = []
+    for path in sorted((CONFIG_DIR / "gamepads").glob("*.json")):
+        data: dict[str, Any] = json.loads(path.read_text(encoding="utf-8"))
+        choices.append(GamepadProfileChoice(profile_id=path.stem, name=str(data.get("name", path.stem))))
+    if not choices:
+        raise RuntimeError(f"No gamepad profiles found in {CONFIG_DIR / 'gamepads'}")
+    return choices

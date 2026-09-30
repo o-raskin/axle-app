@@ -6,7 +6,7 @@ import asyncio
 from collections.abc import Iterable
 from contextlib import suppress
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Callable
 
 from .audio import ReverseBeep, reverse_beep_status
 from .cars.model_profiles import DEFAULT_REQUIRED_PORT_ROLES, ModelProfile, ModelProfileChoice, available_model_choices
@@ -576,18 +576,20 @@ async def safe_shutdown(
     hub: TechnicMoveHub,
     pygame_mod: Any,
     gamepad_led: ControllerLed | None = None,
+    log: Callable[[str], None] | None = None,
 ) -> None:
     """Stop the car, drop the link and close pygame, from whatever state we are in."""
-    print("Stopping motors...")
+    log_message = log or print
+    log_message("Stopping motors...")
     try:
         if control is not None and hub.is_connected:
             await control.drive(0, 0, lights=False)
     except Exception as exc:
-        print(f"Stop command failed: {exc}")
+        log_message(f"Stop command failed: {exc}")
     try:
         await hub.disconnect()
     except Exception as exc:
-        print(f"Disconnect failed: {exc}")
+        log_message(f"Disconnect failed: {exc}")
     try:
         if gamepad_led is not None:
             gamepad_led.close()
@@ -595,7 +597,7 @@ async def safe_shutdown(
             pygame_mod.quit()
     except Exception:
         pass
-    print("Safe exit.")
+    log_message("Safe exit.")
 
 
 async def run_live_session(
@@ -603,6 +605,7 @@ async def run_live_session(
     pad: GamepadProfile,
     port_map: dict[str, Any],
     hardware: ConnectedHardware,
+    live_console: Any | None = None,
 ) -> str:
     """Run one armed driving session, returning what should be reconnected next."""
     hub = hardware.hub
@@ -612,7 +615,7 @@ async def run_live_session(
     control = None
     gamepad_led = None
     reverse_beep = None
-    console = LiveConsole()
+    console = live_console or LiveConsole()
     reconnect_reason = SESSION_EXIT
     boost_rumble = BoostRumble()
 
@@ -760,7 +763,7 @@ async def run_live_session(
         if reverse_beep is not None:
             reverse_beep.stop()
         console.stop()
-        await safe_shutdown(control, hub, pygame_mod, gamepad_led)
+        await safe_shutdown(control, hub, pygame_mod, gamepad_led, log=console.log)
     return reconnect_reason
 
 

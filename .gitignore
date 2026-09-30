@@ -152,6 +152,7 @@ activemq-data/
 .envrc
 .venv
 .venv-release/
+.venv-ci/
 lego-env/
 env/
 venv/
@@ -211,6 +212,13 @@ tempCodeRunnerFile.py
 # Ruff stuff:
 .ruff_cache/
 
+# Node / Electron UI
+ui/electron/node_modules/
+ui/electron/dist/
+ui/electron/release/
+ui/electron/out/
+ui/electron/*.tsbuildinfo
+
 # PyPI configuration file
 .pypirc
 
@@ -223,6 +231,9 @@ __marimo__/
 .streamlit/secrets.toml
 
 # Project generated files
+ui/electron/resources/bridge/
+ui/electron/test-results/
+release-assets/
 config/port_map.json
 hub_scheme.txt
 tumbler_scheme.txt

@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024" role="img" aria-label="Axle">
+  <rect x="32" y="32" width="960" height="960" rx="220" fill="#252c29"/>
+  <g transform="rotate(-34 512 512)">
+    <rect x="215" y="300" width="580" height="166" rx="83" fill="#ff783d"/>
+    <rect x="230" y="546" width="580" height="166" rx="83" fill="#f4f3ef"/>
+    <g fill="#252c29">
+      <circle cx="298" cy="383" r="32"/><circle cx="712" cy="383" r="32"/>
+      <circle cx="313" cy="629" r="32"/><circle cx="727" cy="629" r="32"/>
+    </g>
+  </g>
+</svg>

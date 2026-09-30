@@ -1,15 +1,225 @@
-name: Lint
+name: Verify
 
 on:
   pull_request:
+  workflow_call:
+    inputs:
+      version:
+        description: Version embedded in the native packages
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verify-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+defaults:
+  run:
+    shell: bash
 
 jobs:
-  pre-commit:
-    runs-on: ubuntu-latest
+  source:
+    name: Python and workflow checks
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          python-version: "3.9"
-      - run: python -m pip install --upgrade pip pre-commit
-      - run: pre-commit run --all-files --show-diff-on-failure
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: requirements*.txt
+      - run: python -m pip install -r requirements.txt
+      - name: Lint, formatting and types
+        run: |
+          python -m ruff check .
+          python -m ruff format --check .
+          python -m mypy --strict --ignore-missing-imports --scripts-are-modules gamepad_bridge.py probe_hub.py bridge scripts
+      - name: Validate GitHub workflows
+        env:
+          ACTIONLINT_VERSION: 1.7.12
+          ACTIONLINT_SHA256: 8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8
+        run: |
+          archive="$RUNNER_TEMP/actionlint.tar.gz"
+          curl --fail --silent --show-error --location --retry 3 \
+            "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz" -o "$archive"
+          echo "$ACTIONLINT_SHA256  $archive" | sha256sum --check
+          tar -xzf "$archive" -C "$RUNNER_TEMP" actionlint
+          "$RUNNER_TEMP/actionlint" -color
+
+  frontend:
+    name: Electron lint, tests and UI verification
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: ui/electron
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: ui/electron/package-lock.json
+      - run: npm ci
+      - name: Lint, unit tests and production renderer
+        run: |
+          npm run lint
+          npm test
+          npm run build
+      - name: Install display dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends xvfb libgtk-3-0 libnss3 libasound2 libgbm1
+      - name: Verify UI flows in Electron
+        env:
+          AXLE_AUDIT_DIR: ${{ github.workspace }}/ui/electron/test-results
+        run: xvfb-run --auto-servernum npm run test:ui
+      - name: Retain UI failure evidence
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ui-failure-evidence
+          path: ui/electron/test-results/
+          if-no-files-found: ignore
+          retention-days: 7
+
+  native:
+    name: Native packages (${{ matrix.target }})
+    needs: [source, frontend]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { target: macos-arm64, runner: macos-14, platform: mac, arch: arm64, suffix: '' }
+          - { target: macos-x64, runner: macos-15-intel, platform: mac, arch: x64, suffix: '' }
+          - { target: windows-x64, runner: windows-2022, platform: win, arch: x64, suffix: .exe }
+          - { target: linux-x64, runner: ubuntu-22.04, platform: linux, arch: x64, suffix: '' }
+    env:
+      RELEASE_VERSION: ${{ inputs.version || '0.1.0' }}
+      RELEASE_TARGET: ${{ matrix.target }}
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      SDL_VIDEODRIVER: dummy
+      SDL_AUDIODRIVER: dummy
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: requirements*.txt
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: ui/electron/package-lock.json
+      - name: Install pinned build dependencies
+        run: |
+          python -m pip install -r requirements.txt -r requirements-build.txt
+          npm ci --prefix ui/electron
+      - name: Native unit tests
+        run: |
+          python -m pytest tests -q
+          npm test --prefix ui/electron
+      - name: Build and verify standalone terminal runtime
+        run: |
+          python scripts/build_release.py
+          python scripts/verify_release.py "dist/lego-technic-gamepad-bridge${{ matrix.suffix }}"
+      - name: Install Linux packaging and display dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends xvfb libgtk-3-0 libnss3 libasound2 libgbm1 libfuse2
+      - name: Build Electron with bundled native runtime
+        working-directory: ui/electron
+        run: |
+          npm version "$RELEASE_VERSION" --no-git-tag-version --allow-same-version
+          npm run build
+          npx --no-install electron-builder --${{ matrix.platform }} --${{ matrix.arch }} --publish never
+      - name: Verify macOS ZIP payload and DMG
+        if: runner.os == 'macOS'
+        working-directory: ui/electron
+        run: |
+          hdiutil verify "release/Axle-${RELEASE_VERSION}-mac-${{ matrix.arch }}.dmg"
+          ditto -x -k "release/Axle-${RELEASE_VERSION}-mac-${{ matrix.arch }}.zip" "$RUNNER_TEMP/axle-zip"
+          npm run test:package -- "$RUNNER_TEMP/axle-zip/Axle.app/Contents/MacOS/Axle"
+      - name: Install and verify Windows package
+        if: runner.os == 'Windows'
+        shell: pwsh
+        working-directory: ui/electron
+        run: |
+          $installer = (Resolve-Path "release/Axle-$env:RELEASE_VERSION-win-x64.exe").Path
+          $destination = Join-Path $env:RUNNER_TEMP 'AxleInstalled'
+          $install = Start-Process -FilePath $installer -ArgumentList '/S', "/D=$destination" -PassThru -Wait
+          if ($install.ExitCode -ne 0) { throw "Installer failed: $($install.ExitCode)" }
+          npm run test:package -- "$destination/Axle.exe"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Verify Linux and Steam Deck AppImage payload
+        if: runner.os == 'Linux'
+        working-directory: ui/electron
+        run: |
+          appimage="$PWD/release/Axle-${RELEASE_VERSION}-linux-x86_64.AppImage"
+          chmod +x "$appimage"
+          cd "$RUNNER_TEMP"
+          "$appimage" --appimage-extract >/dev/null
+          cd "$GITHUB_WORKSPACE/ui/electron"
+          xvfb-run --auto-servernum npm run test:package -- "$RUNNER_TEMP/squashfs-root/AppRun"
+          dpkg-deb --extract "release/Axle-${RELEASE_VERSION}-linux-amd64.deb" "$RUNNER_TEMP/axle-deb"
+          xvfb-run --auto-servernum npm run test:package -- "$RUNNER_TEMP/axle-deb/opt/Axle/axle"
+      - name: Stage archives and artifact manifest
+        run: >-
+          python scripts/release_assets.py stage --version "$RELEASE_VERSION"
+          --commit "$GITHUB_SHA" --target "$RELEASE_TARGET"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-${{ matrix.target }}
+          path: release-assets/
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
+
+  verified:
+    name: Verify complete release
+    if: always()
+    needs: [source, frontend, native]
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    steps:
+      - name: Require all verification jobs to succeed
+        env:
+          JOB_RESULTS: ${{ toJSON(needs) }}
+        shell: python
+        run: |
+          import json
+          import os
+          results = json.loads(os.environ['JOB_RESULTS'])
+          failed = [name for name, job in results.items() if job['result'] != 'success']
+          if failed:
+              raise SystemExit(f"Required jobs did not succeed: {', '.join(failed)}")
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: release-*
+          path: release-assets
+          merge-multiple: true
+          digest-mismatch: error
+      - name: Require every native asset and verify checksums
+        env:
+          RELEASE_VERSION: ${{ inputs.version || '0.1.0' }}
+        run: python scripts/release_assets.py verify --version "$RELEASE_VERSION" --commit "$GITHUB_SHA"

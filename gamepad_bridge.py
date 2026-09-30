@@ -2,9 +2,6 @@
 
 from __future__ import annotations
 
-import argparse
-import asyncio
-
 from bridge.audio import (
     AudioObjectPropertyAddress,
     CoreAudioOutputDevice,
@@ -34,6 +31,7 @@ from bridge.audio import (
 from bridge.cars.model_profiles import ModelProfile
 from bridge.cars.tumbler.effects import AttackSignal, AutomaticLights
 from bridge.cars.tumbler.low_level_control import LowLevelControl
+from bridge.cli import main, profile_catalog_json, run, run_hub_scan
 from bridge.dashboard import (
     CarTelemetry,
     LiveConsole,
@@ -105,6 +103,7 @@ from bridge.platforms.current import configure_process_for_platform
 from bridge.port_map import load_port_map, port_id
 from bridge.safety import SafetyLimits, require_user_acknowledgement
 from bridge.session import (
+    DEFAULT_MODEL_PROFILE,
     ConnectedHardware,
     HubTarget,
     connect_hub_for_drive,
@@ -175,7 +174,7 @@ from bridge.settings import (
     SPEED_RUMBLE_STRENGTH,
     STARTUP_RETRY_DELAY_S,
 )
-from bridge.transport import DEFAULT_HUB_NAME, TechnicMoveHub
+from bridge.transport import TechnicMoveHub
 
 __all__ = [
     "ATTACK_SIGNAL_DURATION_S",
@@ -201,6 +200,7 @@ __all__ = [
     "DASHBOARD_ELLIPSIS_WIDTH",
     "DASHBOARD_LOG_LIMIT",
     "DASHBOARD_MAX_WIDTH",
+    "DEFAULT_MODEL_PROFILE",
     "DEFAULT_SPEED_MODE",
     "DRIVE_RUMBLE_MAX_STRENGTH",
     "DRIVE_RUMBLE_PRESSURE_EXPONENT",
@@ -307,6 +307,7 @@ __all__ = [
     "open_pygame_sound",
     "open_system_sound",
     "port_id",
+    "profile_catalog_json",
     "read_drive_input",
     "read_drive_state",
     "read_throttle",
@@ -349,64 +350,5 @@ __all__ = [
 ]
 
 
-async def run_hub_scan(name: str, address: str | None) -> None:
-    """Scan a Technic Move Hub and save the generated runtime port map."""
-    print(f"Scanning for hub: {address or name}. Press the hub power/connect button now.")
-    port_map, report = await scan_hub(name, address)
-    save_probe_outputs(port_map, report)
-    print(report, end="")
-    print(f"Saved report to {HUB_SCHEME_PATH}")
-    print(f"Saved port map to {PORT_MAP_PATH}")
-
-
-async def main() -> None:
-    """Parse CLI arguments and dispatch the requested bridge mode."""
-    parser = argparse.ArgumentParser(
-        description="LEGO Technic gamepad bridge. Run with no arguments to start live control."
-    )
-    parser.add_argument("--arm", action="store_true", help="Live control with hub (default)")
-    parser.add_argument("--probe", action="store_true", help="Log gamepad axes/buttons without connecting to the hub")
-    parser.add_argument("--gamepad-devices", action="store_true", help="Print SDL/Pygame gamepad diagnostics and exit")
-    parser.add_argument("--scan-hub", action="store_true", help="Scan the hub and save the car port map")
-    parser.add_argument(
-        "--audio-devices",
-        action="store_true",
-        help="List audio outputs and selected reverse beep device",
-    )
-    parser.add_argument("--model", default=None, help="Model profile in config/models/; skips startup selector")
-    parser.add_argument("--gamepad", default="auto", help="Gamepad profile in config/gamepads/ or 'auto'")
-    parser.add_argument("--name", default=DEFAULT_HUB_NAME, help="Technic hub name to scan/connect")
-    parser.add_argument("--address", default=None, help="Exact BLE address for a specific Technic hub")
-    args = parser.parse_args()
-
-    if args.audio_devices:
-        run_audio_probe()
-        return
-
-    if args.gamepad_devices:
-        print(gamepad_diagnostics())
-        return
-
-    if args.scan_hub:
-        setup = SetupConsole()
-        await wait_for_bluetooth(setup)
-        setup.stop()
-        await run_hub_scan(args.name, args.address)
-        return
-
-    if args.probe:
-        setup = SetupConsole()
-        pad_candidates = gamepad_profile_candidates(args.gamepad)
-        pygame_mod, joystick, _pad = await wait_for_gamepad(setup, pad_candidates)
-        setup.stop()
-        run_probe(pygame_mod, joystick)
-        return
-
-    await run_control(args.model, args.gamepad, args.name, args.address)
-
-
 if __name__ == "__main__":
-    try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        print("\nExited.")
+    raise SystemExit(run())

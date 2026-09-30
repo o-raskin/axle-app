@@ -1,5 +1,5 @@
-# Single source of truth for lint/format rules — CI runs the same via
-# `pre-commit run --all-files` (see .github/workflows/lint.yml).
+# Local Python checks mirror the pinned CI tools and ruff.toml rules.
+# The full native packaging and Electron checks run in .github/workflows/lint.yml.
 # Contributors: pip install pre-commit && pre-commit install
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
@@ -11,7 +11,7 @@ repos:
       - id: end-of-file-fixer
       - id: trailing-whitespace
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.16.1
+    rev: v0.16.9
     hooks:
       - id: ruff
         args: [--fix]
@@ -31,6 +31,6 @@ repos:
         entry: python -m pytest tests -q
         # Its own env, so CI does not depend on pytest being in the system interpreter.
         language: python
-        additional_dependencies: [pytest, bleak]
+        additional_dependencies: [pytest==8.4.2, bleak==1.1.1]
         pass_filenames: false
         always_run: true

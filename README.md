@@ -49,33 +49,45 @@ New gamepads should be added as JSON profiles under `config/gamepads/` plus a sp
 `bridge/gamepads/` when SDL needs special handling. New LEGO Technic cars should get their model JSON
 under `config/models/` and any car-specific runtime package under `bridge/cars/<car_name>/`.
 
+The Electron desktop UI base lives separately under `ui/electron/`. It has its own Node package,
+Electron main/preload/renderer processes, and packaging scripts for macOS, Windows, Linux, and a
+Steam Deck-oriented Linux x64 AppImage. Desktop releases include a frozen bridge runtime. Python
+remains the source of truth for BLE, gamepad input, model behavior, safety shutdown, hub scanning,
+and diagnostics; Electron is only a frontend/controller over the structured Python protocol.
+
 ## Requirements
 
-- macOS with a Sony DualSense controller, or Steam Deck/Linux x86_64 with Steam Input/Xbox-style controls
+- macOS (Apple Silicon or Intel), Windows x64, or Linux x64 / Steam Deck with a compatible controller
 - Bluetooth enabled
 - LEGO Technic Move Hub (88019)
 - LEGO Technic 42239 Batmobile Tumbler profile, shipped as `config/models/tumbler.json`
 
-Python 3.9+ is only required when running from source or building a release.
+Python is required only for development. CI builds with Python 3.12 and Node.js 24 LTS.
 
 ## Start From a Release
 
-Download the matching asset from the latest GitHub prerelease:
+Download the matching asset from the latest GitHub Release:
 
-- macOS Apple Silicon: `lego-technic-gamepad-bridge-v...-macos-arm64`
-- Steam Deck/Linux x86_64 AppImage: `lego-technic-gamepad-bridge-v...-linux-x86_64.AppImage`
-- Steam Deck/Linux x86_64 raw terminal binary: `lego-technic-gamepad-bridge-v...-linux-x86_64`
+| Platform | Terminal archive | Axle desktop |
+| --- | --- | --- |
+| macOS Apple Silicon | `lego-technic-gamepad-bridge-vVERSION-macos-arm64.tar.gz` | `Axle-VERSION-mac-arm64.dmg` / `.zip` |
+| macOS Intel | `lego-technic-gamepad-bridge-vVERSION-macos-x64.tar.gz` | `Axle-VERSION-mac-x64.dmg` / `.zip` |
+| Windows x64 | `lego-technic-gamepad-bridge-vVERSION-windows-x64.zip` | `Axle-VERSION-win-x64.exe` |
+| Linux x64 / Steam Deck | `lego-technic-gamepad-bridge-vVERSION-linux-x64.tar.gz` | `Axle-VERSION-linux-x86_64.AppImage` / `Axle-VERSION-linux-amd64.deb` |
+
+Replace `VERSION` with the release number. Extract terminal archives before running the binary;
+on Windows its filename ends in `.exe`. Both editions include Python, SDL and the built-in profiles.
+The release includes `SHA256SUMS` and `release-manifest.json` for download verification.
 
 On Steam Deck, use the AppImage for normal launching:
 
 ```bash
-chmod +x ./lego-technic-gamepad-bridge-v...-linux-x86_64.AppImage
-./lego-technic-gamepad-bridge-v...-linux-x86_64.AppImage
+chmod +x ./Axle-VERSION-linux-x86_64.AppImage
+./Axle-VERSION-linux-x86_64.AppImage
 ```
 
-The raw Linux binary is useful for terminal debugging, but KDE/Dolphin may ask whether to run it
-with Konsole. The AppImage is the intended double-clickable and Steam-friendly format; when launched
-without a terminal, it opens Konsole itself and runs the bridge inside it.
+The AppImage opens the Axle desktop UI and is shared by Linux and Steam Deck. The terminal archive
+provides the command-line interface for scripting and debugging. Current packages are unsigned.
 
 If macOS blocks a downloaded unsigned binary, remove the download quarantine and run it again:
 
@@ -84,7 +96,7 @@ xattr -dr com.apple.quarantine ./lego-technic-gamepad-bridge
 ./lego-technic-gamepad-bridge
 ```
 
-The release executable starts the guided live-control flow by default. Startup first asks which model
+The terminal executable starts the guided live-control flow by default. Startup first asks which model
 profile to drive. Use keyboard Up/Down + Enter, or gamepad D-pad Up/Down + A/Cross, to choose. If
 this machine does not have a saved car port map yet, the bridge scans the hub first, saves the
 result, and continues startup. The scan does not move the model.
@@ -96,7 +108,8 @@ Release runtime files are stored under:
 ~/.lego-technic-gamepad-bridge/
 ```
 
-Set `LEGO_BRIDGE_HOME=/some/path` before launch to use a different runtime state directory.
+Set `LEGO_BRIDGE_HOME=/some/path` before launching the terminal to change its state directory.
+The desktop app stores bridge state with its settings in Electron's user-data directory.
 
 Useful release commands:
 
@@ -119,16 +132,15 @@ to reconnect to the exact same hub, pass its BLE address:
 ```
 
 On Steam Deck, download the AppImage in Desktop Mode, mark it executable, and add the AppImage to
-Steam as a Non-Steam Game if you want to launch it from Game Mode. Directly launching the AppImage
-opens its own Konsole window; do not use Dolphin's raw-binary `Run with Konsole` path for normal use.
+Steam as a Non-Steam Game if you want to launch it from Game Mode. Use a gamepad Steam Input layout.
 
 If startup remains stuck on `Gamepad controller detected`, run:
 
 ```bash
-./lego-technic-gamepad-bridge-v...-linux-x86_64.AppImage --gamepad-devices
+./lego-technic-gamepad-bridge --gamepad-devices
 ```
 
-On Steam Deck, the best report has a `controller_count` greater than zero and at least one
+The same report is available in Axle's Diagnostics. On Steam Deck, the best report has a `controller_count` greater than zero and at least one
 `controller[N].is_controller=True` line for `Steam Virtual Gamepad`, `Steam Deck`, or an Xbox-style
 name. The bridge uses SDL's GameController path first because Steam Input and the Deck's built-in
 controller are mapped there consistently; `joystick_count=0` is acceptable if the controller lines
@@ -143,36 +155,104 @@ the reported name.
 Build the matching release target on its native OS:
 
 ```bash
-scripts/build_macos_release.sh
-bash scripts/build_linux_release.sh
-bash scripts/build_linux_appimage.sh
+python -m pip install -r requirements-build.txt
+python scripts/build_release.py
+python scripts/verify_release.py dist/lego-technic-gamepad-bridge
 ./dist/lego-technic-gamepad-bridge
-./dist/lego-technic-gamepad-bridge.AppImage
 ```
 
-The macOS build script must run on macOS. The Linux script must run on x86_64 Linux. Each script
-creates a local release virtualenv, installs PyInstaller and the runtime dependencies, then writes a
-single terminal executable to `dist/lego-technic-gamepad-bridge`. The AppImage script wraps that
-Linux executable into `dist/lego-technic-gamepad-bridge.AppImage`; set `APPIMAGETOOL=/path/to/appimagetool`
-when building locally.
+Use a Python 3.12 virtual environment on the target OS and architecture. On Windows, append `.exe`
+to the output path. The macOS/Linux shell scripts are wrappers around this shared recipe.
+Build the terminal runtime before packaging Electron; the package hook copies it into the app.
+The old `build_linux_appimage.sh` terminal wrapper remains available for legacy manual builds;
+the release pipeline ships the Electron AppImage instead.
+
+## Desktop UI Package
+
+The Electron renderer talks only to its preload API. In development, the main process runs
+`gamepad_bridge.py --frontend jsonl`; packaged apps run their bundled native executable. Both paths
+validate JSON Lines events and use a stdin stop command so the engine can finish cleanup on every OS.
+
+```bash
+python3 -m venv lego-env
+source lego-env/bin/activate
+pip install -r requirements.txt
+
+cd ui/electron
+npm install
+npm run dev
+```
+
+`npm run dev` opens Electron. The Drive screen guides you through connecting the vehicle and
+controller, preparing live control, and ending the session. If multiple vehicle profiles are
+available, choose one on the vehicle card. Settings contains controller selection, fullscreen
+preference, and advanced connection overrides. Opt-in Diagnostics retains
+hub scanning, gamepad reports, the live input probe, audio outputs, and technical event details.
+The Python CLI remains responsible for every hardware operation.
+
+See [the desktop product audit](docs/product-redesign.md) for the user journeys, state contract,
+design direction, and asset inventory.
+
+The development app expects the Python source checkout to be present. It searches upward from the
+Electron package for `gamepad_bridge.py`, then tries Python in this order:
+
+- `LEGO_BRIDGE_PYTHON=/path/to/python`, when set;
+- `lego-env/bin/python` or `.venv/bin/python` under the repo;
+- `python3`, `python`, then the Windows `py -3` launcher.
+
+Set `LEGO_BRIDGE_PROJECT_ROOT=/path/to/lego-technic-gamepad-bridge` if you launch Electron from an
+unusual working directory. Python dependencies must already be installed in the selected
+environment; the Electron package does not install or bundle them yet.
+
+The normal CLI remains human-first and keeps the terminal dashboard/log UX:
+
+```bash
+python gamepad_bridge.py --model tumbler --gamepad auto
+python gamepad_bridge.py --scan-hub
+```
+
+Electron uses protocol mode instead. In protocol mode, stdout is reserved for JSON Lines events and
+human diagnostics are emitted as structured log events or stderr:
+
+```bash
+python gamepad_bridge.py --frontend jsonl --profiles-json
+python gamepad_bridge.py --frontend jsonl --model tumbler --gamepad auto
+python gamepad_bridge.py --frontend jsonl --scan-hub
+```
+
+Protocol events include lifecycle status, setup progress, logs, errors, command results, live car
+telemetry where available, and exit/shutdown records. TypeScript does not duplicate BLE, gamepad,
+model, port-map, safety, audio, or diagnostic behavior; it only starts Python operations and renders
+their structured events.
+
+Desktop package commands:
+
+```bash
+npm run dist:mac         # unsigned local macOS DMG + ZIP
+npm run dist:mac:signed  # signed macOS DMG + ZIP when certificates are configured
+npm run dist:win
+npm run dist:linux
+npm run dist:steamdeck
+```
+
+The `dist:*` commands require the native runtime in the repository's `dist/` directory and must run
+on the target OS/architecture. They produce self-contained desktop packages. Use `npm run dev`
+while developing, or `npm run start` after `npm run build` to preview the app locally.
+The Linux x64 AppImage is also the Steam Deck package.
 
 ## Automated Release Builds
 
-Every push to `main` runs `.github/workflows/release.yml`. It is a multi-job pipeline:
+Pull requests run the reusable `.github/workflows/lint.yml`: Python lint/format/types, Electron
+lint/types/unit/UI checks, native Python and Electron tests, all four native package builds, and
+verification of frozen resources, installed/extracted desktop payloads and the complete artifact set.
 
-- `lint`: runs ruff, pytest, and mypy;
-- `version`: computes a SemVer version as `0.1.<github-run-number>`;
-- `build_macos_release`: builds the single-file macOS executable;
-- `build_linux_release`: builds the single-file Linux x86_64 executable;
-- `publish_release`: uploads both assets and publishes a GitHub Release.
+Every push to `main` runs `.github/workflows/release.yml`, using the same verification workflow.
+Versions use the major/minor from `ui/electron/package.json` and the release workflow run number
+as the patch (currently `0.1.<run-number>`). Publication requires all eleven distribution assets.
+Assets are uploaded to a draft first; published assets are never overwritten by a rerun.
 
-Release tags use `v0.1.<github-run-number>`. The release assets are named
-`lego-technic-gamepad-bridge-v0.1.<github-run-number>-macos-arm64` and
-`lego-technic-gamepad-bridge-v0.1.<github-run-number>-linux-x86_64`; Steam Deck releases also include
-`lego-technic-gamepad-bridge-v0.1.<github-run-number>-linux-x86_64.AppImage`.
-
-Manual builds can also be started from the workflow's `workflow_dispatch` trigger. Release publishing
-is limited to runs on `main`.
+Manual dispatch builds any selected branch; only `main` publishes. See
+[release pipeline details](docs/release-pipeline.md) for runner choices, verification and local commands.
 
 ## Run From Source
 
@@ -189,6 +269,7 @@ Source-mode utility commands mirror the release executable:
 python gamepad_bridge.py --scan-hub
 python gamepad_bridge.py --probe
 python gamepad_bridge.py --audio-devices
+python gamepad_bridge.py --frontend jsonl --profiles-json
 ```
 
 The legacy `python probe_hub.py` command is still available for development, but users should not
@@ -320,3 +401,9 @@ pytest tests -q
 The tests cover the byte-level startup sequence, PLAYVM command bits, port-map shape, DualSense and
 Steam Deck profile mappings, Bluetooth status parsing, safe-exit inputs, trigger scaling, speed
 modes, LED colors, rumble behavior, reverse beep cadence, and automatic lights.
+
+## Independence
+
+This is an independent project and is not affiliated with, endorsed by, or sponsored by the LEGO
+Group. LEGO® is a trademark of the LEGO Group. Other product and brand names identify compatible
+hardware or model profiles and belong to their respective owners.

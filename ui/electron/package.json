@@ -1,0 +1,116 @@
+{
+  "name": "@lego-technic-gamepad-bridge/electron-ui",
+  "version": "0.1.0",
+  "description": "Axle, an independent desktop companion for gamepad-controlled Technic vehicles.",
+  "homepage": "https://github.com/o-raskin/lego-technic-gamepad-bridge",
+  "private": true,
+  "main": "dist/main/index.js",
+  "author": "LEGO Technic Gamepad Bridge contributors",
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=24.12.0",
+    "npm": ">=10.0.0"
+  },
+  "scripts": {
+    "dev": "electron-vite dev",
+    "lint": "oxlint --deny-warnings src scripts tests electron.vite.config.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "node scripts/test.cjs",
+    "test:ui": "node scripts/smoke-test.cjs",
+    "test:package": "node scripts/verify-package.cjs",
+    "build": "npm run typecheck && electron-vite build",
+    "start": "electron-vite preview",
+    "dist": "npm run build && electron-builder --publish never",
+    "dist:mac": "npm run build && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac --publish never",
+    "dist:mac:signed": "npm run build && electron-builder --mac --publish never",
+    "dist:win": "npm run build && electron-builder --win --publish never",
+    "dist:linux": "npm run build && electron-builder --linux --publish never",
+    "dist:steamdeck": "npm run build && electron-builder --linux AppImage --x64 --publish never"
+  },
+  "dependencies": {
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.3",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^5.2.0",
+    "electron": "^44.4.5",
+    "electron-builder": "^26.15.3",
+    "electron-vite": "^5.0.0",
+    "oxlint": "1.86.0",
+    "playwright-core": "1.63.0",
+    "typescript": "^7.0.2",
+    "vite": "^7.3.6"
+  },
+  "build": {
+    "appId": "dev.lego-technic-gamepad-bridge.ui",
+    "productName": "Axle",
+    "icon": "resources/icon.png",
+    "asar": true,
+    "beforePack": "scripts/bundle-bridge.cjs",
+    "extraResources": [
+      { "from": "resources/bridge", "to": "bridge" },
+      { "from": "../../LICENSE", "to": "LICENSE" }
+    ],
+    "directories": {
+      "buildResources": "resources",
+      "output": "release"
+    },
+    "files": [
+      "dist/**",
+      "package.json"
+    ],
+    "extraMetadata": {
+      "main": "dist/main/index.js"
+    },
+    "mac": {
+      "category": "public.app-category.utilities",
+      "extendInfo": {
+        "NSBluetoothAlwaysUsageDescription": "Axle uses Bluetooth to connect to and control your Technic Move Hub."
+      },
+      "target": [
+        "dmg",
+        "zip"
+      ]
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    },
+    "linux": {
+      "executableName": "axle",
+      "maintainer": "LEGO Technic Gamepad Bridge contributors",
+      "category": "Utility",
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "deb",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "deb": {
+      "packageName": "axle"
+    },
+    "artifactName": "${productName}-${version}-${os}-${arch}.${ext}"
+  }
+}

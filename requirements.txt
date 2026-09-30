@@ -1,4 +1,4 @@
 -r requirements-runtime.txt
-pytest
-ruff
-mypy
+pytest==8.4.2
+ruff==0.16.9
+mypy==1.19.1
