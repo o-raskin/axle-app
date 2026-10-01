@@ -36,8 +36,8 @@ def release(tmp_path: Path) -> Path:
 
 def test_release_requires_every_target_and_generates_checksums(release: Path) -> None:
     manifest = assets.verify(release, VERSION, COMMIT)
-    assert len(manifest["assets"]) == 11
-    assert len((release / "SHA256SUMS").read_text().splitlines()) == 12
+    assert len(manifest["assets"]) == 13
+    assert len((release / "SHA256SUMS").read_text().splitlines()) == 14
     assert assets.verify(release, VERSION, COMMIT) == manifest
     for target in assets.TARGETS:
         path = release / assets.asset_names(VERSION, target)[0]
@@ -49,6 +49,24 @@ def test_release_requires_every_target_and_generates_checksums(release: Path) ->
             with tarfile.open(path) as archive:
                 assert archive.getmember(assets.BINARY).mode == 0o755
                 assert "LICENSE" in archive.getnames()
+
+
+@pytest.mark.parametrize("damage", ["version", "checksum", "url", "size"])
+def test_update_metadata_must_match_installer_even_with_a_valid_inventory(release: Path, damage: str) -> None:
+    path = release / "latest-linux.yml"
+    metadata = json.loads(path.read_text())
+    if damage == "version":
+        metadata["version"] = "9.9.9"
+    else:
+        key = {"checksum": "sha512", "url": "url", "size": "size"}[damage]
+        metadata["files"][0][key] = "https://foreign.invalid/installer" if damage == "url" else 1
+    assets.write_json(path, metadata)
+    manifest_path = release / "manifest-linux-x64.json"
+    manifest = json.loads(manifest_path.read_text())
+    manifest["assets"][-1] = assets.describe(path)
+    assets.write_json(manifest_path, manifest)
+    with pytest.raises(ValueError, match="Update metadata"):
+        assets.verify(release, VERSION, COMMIT)
 
 
 @pytest.mark.parametrize("damage", ["missing", "modified", "foreign", "wrong-commit", "duplicate", "traversal"])

@@ -58,3 +58,45 @@ test("device inventory cannot start alongside an active session", async () => {
   assert.equal(harness.starts.length, 0);
   assert.equal(harness.profileRequests, 0);
 });
+
+test("startup discovery does not select a model or arm the driving engine", async () => {
+  const harness = serviceHarness();
+  harness.service.getProfiles = async () => ({ defaults: { hubName: "Technic Move" } });
+  assert.equal((await harness.service.startDiscovery()).ok, true);
+  assert.deepEqual(harness.starts, [{ kind: "discover", args: ["--discover", "--name", "Technic Move"] }]);
+});
+
+test("a diagnostic waits for background discovery to close before starting", async () => {
+  const harness = serviceHarness();
+  harness.service.child = {};
+  harness.service.currentSnapshot = { status: "running", operation: "discover" };
+  let closed = false;
+  harness.service.stopForAppQuit = async () => {
+    assert.equal(harness.starts.length, 0);
+    harness.service.child = null;
+    closed = true;
+  };
+  assert.equal((await harness.service.runCommand({ kind: "audioDevices" })).ok, true);
+  assert.equal(closed, true);
+  assert.deepEqual(harness.starts, [{ kind: "audioDevices", args: ["--audio-devices"] }]);
+});
+
+test("shutdown guard also rejects a startup already awaiting its profile catalog", async () => {
+  const execute = vm.runInNewContext(`(function(require, module, exports) { ${compiled}\n})`, {
+    console, process, Date, setTimeout, clearTimeout
+  });
+  const module = { exports: {} };
+  execute((id) => id === "electron" ? { app: {} } : require(id), module, module.exports);
+  let allowed = true;
+  const service = new module.exports.BridgeProcessService({
+    canStart: () => allowed, publishLog() {}, publishStatus() {}, publishEvent() {}
+  });
+  let finish;
+  service.getProfiles = () => new Promise((resolve) => { finish = resolve; });
+  const starting = service.startLive({ modelId: "tumbler", gamepadId: "auto" });
+  await new Promise((resolve) => setImmediate(resolve));
+  allowed = false;
+  finish({ models: [{ id: "tumbler" }], gamepads: [{ id: "auto" }], defaults: { model: "tumbler", gamepad: "auto", hubName: "Technic Move" } });
+  assert.equal((await starting).ok, false);
+  assert.equal(service.hasActiveProcess(), false);
+});

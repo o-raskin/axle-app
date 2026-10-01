@@ -18,6 +18,7 @@ from typing import Any, TextIO
 from .audio import audio_output_devices, coreaudio_output_devices, dualsense_audio_device, run_audio_probe
 from .cars.model_profiles import ModelProfile, available_model_choices
 from .dashboard import CarTelemetry, SetupConsole
+from .discovery import discover_hardware
 from .gamepads.input import gamepad_diagnostics, snapshot
 from .gamepads.profile_loader import AUTO_GAMEPAD_PROFILE, available_gamepad_choices, gamepad_profile_candidates
 from .hub_probe import save_probe_outputs, scan_hub
@@ -37,7 +38,7 @@ from .transport import DEFAULT_HUB_NAME
 
 PROTOCOL_NAME = "lego-technic-bridge"
 PROTOCOL_VERSION = 1
-TELEMETRY_INTERVAL_S = 0.2
+TELEMETRY_INTERVAL_S = 0.1
 GAMEPAD_PROBE_INTERVAL_S = 0.03
 MAX_CONTROL_LINE_BYTES = 4096
 
@@ -291,7 +292,7 @@ async def run_jsonl_frontend(
     operation = operation_from_args(args)
     out.emit("process/status", status="starting", operation=operation)
     # One-shot inventories do not require an open parent connection.
-    stream = control_stream if operation in {"live", "scanHub", "probeGamepad"} else None
+    stream = control_stream if operation in {"live", "scanHub", "probeGamepad", "discover"} else None
     with _frontend_control(stream) as stopped:
         return await _dispatch_jsonl_operation(args, out, operation, stopped)
 
@@ -308,6 +309,8 @@ async def _dispatch_jsonl_operation(args: Any, out: JsonLineEmitter, operation: 
             report = gamepad_diagnostics()
             _emit_report_logs(out, report)
             out.emit("command/result", command="gamepadDevices", ok=True, payload={"report": report})
+        elif getattr(args, "discover", False):
+            await discover_hardware(out, args.name, args.address)
         elif args.scan_hub:
             await run_protocol_hub_scan(out, args.name, args.address)
         elif args.probe:
@@ -335,10 +338,12 @@ async def _dispatch_jsonl_operation(args: Any, out: JsonLineEmitter, operation: 
     return 0
 
 
-def operation_from_args(args: Any) -> str:
+def operation_from_args(args: Any) -> str:  # noqa: PLR0911 -- One return per mutually selected frontend mode.
     """Return the frontend operation name implied by parsed CLI args."""
     if args.profiles_json:
         return "profiles"
+    if getattr(args, "discover", False):
+        return "discover"
     if args.scan_hub:
         return "scanHub"
     if args.probe:

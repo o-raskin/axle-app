@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import base64
 import hashlib
 import json
 import os
@@ -44,7 +45,31 @@ def asset_names(version: str, target: str) -> list[str]:
     return [
         f"{BINARY}-v{version}-{target}.{archive}",
         *(f"Axle-{version}-{host}-{package_arch.get(extension, arch)}.{extension}" for extension in extensions),
+        *(["latest.yml"] if target == "windows-x64" else ["latest-linux.yml"] if target == "linux-x64" else []),
     ]
+
+
+def update_metadata(directory: Path, version: str, target: str) -> dict[str, Any]:
+    """Produce electron-updater metadata bound to the exact verified installer bytes.
+
+    JSON is valid YAML; generating it here avoids merging per-architecture macOS
+    feeds (macOS uses manual installation until Developer ID signing is available).
+    Full downloads need no blockmaps. Linux automatic updates use only AppImage.
+    """
+    name = f"Axle-{version}-win-x64.exe" if target == "windows-x64" else f"Axle-{version}-linux-x86_64.AppImage"
+    path = directory / name
+    describe(path)
+    digest = hashlib.sha512()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    checksum = base64.b64encode(digest.digest()).decode("ascii")
+    return {
+        "version": version,
+        "files": [{"url": name, "sha512": checksum, "size": path.stat().st_size}],
+        "path": name,
+        "sha512": checksum,
+    }
 
 
 def describe(path: Path) -> dict[str, Any]:
@@ -94,6 +119,9 @@ def stage(root: Path, output: Path, version: str, commit: str, target: str) -> N
             if member.mode != EXECUTABLE_MODE or extracted is None or extracted.read() != binary.read_bytes():
                 raise ValueError("Terminal tarball verification failed")
     for name in names[1:]:
+        if name in ("latest.yml", "latest-linux.yml"):
+            write_json(output / name, update_metadata(output, version, target))
+            continue
         source = root / "ui" / "electron" / "release" / name
         describe(source)
         shutil.copy2(source, output / name)
@@ -128,6 +156,10 @@ def verify(directory: Path, version: str, commit: str) -> dict[str, Any]:
         for entry in entries:
             if describe(directory / entry["name"]) != entry:
                 raise ValueError(f"Artifact checksum or size mismatch: {entry['name']}")
+        if target in ("windows-x64", "linux-x64"):
+            metadata = json.loads((directory / expected[-1]).read_text(encoding="utf-8"))
+            if metadata != update_metadata(directory, version, target):
+                raise ValueError(f"Update metadata does not match its installer: {target}")
         all_assets.extend(entries)
         expected_files.update(expected)
     actual_files = {path.name for path in directory.iterdir()}
@@ -209,7 +241,19 @@ def publish(directory: Path, version: str, commit: str) -> None:
         "Terminal: macOS arm64/x64, Windows x64, Linux x64.\n\n"
         "Axle desktop: macOS DMG/ZIP, Windows installer, Linux deb and AppImage. "
         "Use the Linux x64 AppImage on Steam Deck. Python is bundled.\n\n"
-        "These packages are unsigned. Verify downloads with SHA256SUMS. "
+        "Verify downloads with SHA256SUMS. macOS desktop builds are ad-hoc signed and are not "
+        "notarized by Apple; Windows packages are unsigned.\n\n"
+        "**First launch on macOS:** Copy Axle to Applications and open it. If Apple cannot verify "
+        "Axle, dismiss the alert with Done, then open **System Settings → Privacy & Security**. "
+        "Scroll to Security, choose **Open Anyway** for Axle, and confirm Open. Authenticate if asked. "
+        "If the option is missing, try opening Axle again; it is available for about an hour after "
+        "the attempted launch. This approves only Axle. Builds without Apple Developer credentials "
+        "cannot remove this approval requirement. "
+        "[Apple's instructions](https://support.apple.com/en-us/102445).\n\n"
+        "**First launch on Steam Deck:** In Desktop Mode, open the AppImage's Properties → "
+        "Permissions, enable **Is executable**, then open it. Browser downloads do not preserve "
+        "the executable permission. If adding Axle to Steam, leave forced Proton compatibility "
+        "disabled: this is a native Linux app.\n\n"
         "Hardware behavior requires a compatible controller, Bluetooth adapter and hub.\n"
     )
     with tempfile.TemporaryDirectory() as temporary:
@@ -234,7 +278,7 @@ def main() -> None:
         stage(ROOT, args.directory, args.version, args.commit, args.target)
     elif args.command == "verify":
         verify(args.directory, args.version, args.commit)
-        print("Verified all four native targets and eleven distribution assets")
+        print("Verified all four native targets, eleven distribution assets and two update feeds")
     else:
         publish(args.directory, args.version, args.commit)
 

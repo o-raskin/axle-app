@@ -137,7 +137,7 @@ export function DiagnosticsView({ bridge, tab, onTabChange }: DiagnosticsViewPro
           <button
             type="button"
             key={command.kind}
-            disabled={bridge.bridgeActive || !!bridge.pendingAction || (command.requiresProfile && bridge.controlsDisabled)}
+            disabled={(bridge.bridgeActive && !bridge.discoveryActive) || !!bridge.pendingAction || (command.requiresProfile && bridge.controlsDisabled)}
             onClick={() => {
               onTabChange("results");
               void bridge.runBridgeCommand(command.kind);

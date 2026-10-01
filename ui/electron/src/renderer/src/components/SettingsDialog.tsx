@@ -24,12 +24,23 @@ export function SettingsDialog({
   return (
     <Dialog title="Make it yours" subtitle="A few preferences for your next drive." onClose={onClose}>
       <section className="settings-section">
+        <h3>Vehicle</h3>
+        <label className="field">
+          <span>Vehicle model</span>
+          <select value={bridge.selectedModel} disabled={!bridge.profiles || bridge.loading}
+            onChange={(event) => bridge.setSelectedModel(event.target.value)}>
+            {bridge.profiles?.models.map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}
+          </select>
+          <small>Tumbler is currently supported. Axle manages the connection automatically.</small>
+        </label>
+      </section>
+      <section className="settings-section">
         <h3>Controller</h3>
         <label className="field">
           <span>Controller profile</span>
           <select
             value={bridge.selectedGamepad}
-            disabled={!bridge.profiles || bridge.bridgeActive || !!bridge.pendingAction}
+            disabled={!bridge.profiles || bridge.loading}
             onChange={(event) => bridge.setSelectedGamepad(event.target.value)}
           >
             {bridge.profiles?.gamepads.map((gamepad) => (
@@ -39,8 +50,8 @@ export function SettingsDialog({
             ))}
           </select>
           <small>
-            {bridge.bridgeActive
-              ? "Stop your session to change the controller."
+            {bridge.bridgeActive && !bridge.discoveryActive
+              ? "Axle reconnects automatically when you change the controller."
               : "Automatic finds the right profile for your connected controller."}
           </small>
         </label>
@@ -70,7 +81,7 @@ export function SettingsDialog({
       <details className="disclosure">
         <summary>Advanced connection <Icon name="chevron" size={16} /></summary>
         <p className="section-description">Use these only if your hub needs a specific name or address.</p>
-        <fieldset disabled={bridge.bridgeActive || !!bridge.pendingAction}>
+        <fieldset disabled={bridge.loading}>
           <label className="field">
             <span>Hub name</span>
             <input
@@ -92,8 +103,8 @@ export function SettingsDialog({
             <small>Leave empty to find the hub by name.</small>
           </label>
         </fieldset>
-        {bridge.bridgeActive && (
-          <p className="small-note">Stop your session to change connection settings.</p>
+        {bridge.bridgeActive && !bridge.discoveryActive && (
+          <p className="small-note">Axle reconnects automatically when you change connection settings.</p>
         )}
       </details>
 
@@ -123,19 +134,6 @@ export function SettingsDialog({
         An independent project. Not affiliated with, endorsed by, or sponsored by the LEGO Group.
         LEGO® is a trademark of the LEGO Group.
       </p>
-      {bridge.bridgeActive && (
-        <div className="dialog-safety">
-          <button
-            type="button"
-            className="button button--stop"
-            onClick={bridge.stopBridge}
-            disabled={!bridge.canStop || bridge.pendingAction === "stop"}
-          >
-            <Icon name="pause" />
-            {bridge.pendingAction === "stop" ? "Stopping…" : "Stop session"}
-          </button>
-        </div>
-      )}
     </Dialog>
   );
 }

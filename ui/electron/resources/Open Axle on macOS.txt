@@ -1,0 +1,24 @@
+Open Axle on macOS
+
+1. Drag Axle to Applications, then open Axle from Applications.
+2. If macOS says Apple could not verify Axle, choose Done.
+3. Open System Settings → Privacy & Security and scroll to Security.
+4. Choose Open Anyway for Axle, then confirm Open. Authenticate if asked.
+
+If Open Anyway is missing, try opening Axle again. The option appears for
+about an hour after an attempted launch. Future launches use the same
+approval; a new version may require approval again.
+
+Axle is ad-hoc signed and has not been notarized by Apple. Keeping these
+builds free of Apple Developer credentials means the first-launch approval
+cannot be removed. Approve only a release you trust; compare its download
+checksum with SHA256SUMS on the release page.
+
+Apple's instructions:
+https://support.apple.com/en-us/102445
+
+If graphical approval is unavailable, this Terminal fallback removes
+quarantine only from your trusted Axle copy in Applications, then opens it:
+
+xattr -dr com.apple.quarantine /Applications/Axle.app
+open /Applications/Axle.app

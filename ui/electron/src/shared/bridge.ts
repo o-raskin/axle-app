@@ -2,6 +2,7 @@ export type BridgeProcessStatus = "idle" | "starting" | "running" | "stopping" |
 
 export type BridgeOperation =
   | "live"
+  | "discover"
   | "scanHub"
   | "probeGamepad"
   | "gamepadDevices"
@@ -148,6 +149,7 @@ export const bridgeIpcChannels = {
   getProfiles: "bridge:get-profiles",
   getStatus: "bridge:get-status",
   startLive: "bridge:start-live",
+  discover: "bridge:discover",
   stop: "bridge:stop",
   runCommand: "bridge:run-command",
   log: "bridge:log",

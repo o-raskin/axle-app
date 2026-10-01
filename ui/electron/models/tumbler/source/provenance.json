@@ -1,0 +1,103 @@
+{
+  "set": "42239",
+  "sourceAuthor": "포기남 (Fogeyman)",
+  "sourcePage": "https://fogeyman.tistory.com/1770",
+  "sourcePublished": "2026-08-12",
+  "retrieved": "2026-10-01",
+  "assemblyLicense": "CC-BY-NC-4.0",
+  "assemblyLicenseUrl": "https://creativecommons.org/licenses/by-nc/4.0/",
+  "studioBrickInstances": 712,
+  "officialSetPieces": 719,
+  "knownSourceApproximation": "The source creator used an earlier integrated-hub CAD revision as a surrogate. Do not claim an independently verified complete719-element digital twin.",
+  "files": [
+    {
+      "path": "42239.io",
+      "bytes": 2616862,
+      "sha256": "fbe46eea36d95e77779475fd5f463b8b9fa43c6f3f98806643ba02fca696d68f",
+      "origin": "42239.io"
+    },
+    {
+      "path": "42239.mpd",
+      "bytes": 543572,
+      "sha256": "a0c3ca1e813d8b5be39756d505d96c961e703d4dc099eff1860fe84c50441071",
+      "origin": "model.ldr"
+    },
+    {
+      "path": "custom/7655.dat",
+      "bytes": 457765,
+      "sha256": "7ea9779ab708a68ec6a1c5efeff6884e7f073d21e7d3a8296115ec7cc2dd9820",
+      "origin": "CustomParts/7655.dat"
+    },
+    {
+      "path": "custom/7683.dat",
+      "bytes": 824585,
+      "sha256": "95272eb3d530cdfac569165e440b69b5c6bc0b9065734c5ba51fc23388111b9c",
+      "origin": "CustomParts/7683.dat"
+    },
+    {
+      "path": "custom/103479c01-3.dat",
+      "bytes": 5270345,
+      "sha256": "404a1ec8942ce84c8a2730a23baa67e12367d0510d64cce6737d62b5bcdae1c6",
+      "origin": "CustomParts/103479c01-3.dat"
+    },
+    {
+      "path": "custom/69790.dat",
+      "bytes": 377420,
+      "sha256": "3a96c2e174d7859f31bf571bfc2a80d159a9532810521e57546db445dc795ade",
+      "origin": "model2.ldr#69790.dat",
+      "modifications": "Extracted from Studio embedded geometry; inherited surface/edge colors -1/-2 converted to standard LDraw16/24."
+    },
+    {
+      "path": "custom/7101.dat",
+      "bytes": 1156,
+      "sha256": "f18fff7a161ea1268f017f1f36899a7b8e7462fad802e1b7fbc69d098c990c9a",
+      "origin": "model2.ldr#7101.dat",
+      "modifications": "Extracted from Studio embedded geometry; inherited surface/edge colors -1/-2 converted to standard LDraw16/24."
+    },
+    {
+      "path": "custom/bl_7973.dat",
+      "bytes": 69218,
+      "sha256": "25aeba279450f846d805ecb6394268c76cfa044f4e3135f6403206a77f740aa5",
+      "origin": "model2.ldr#7973.dat",
+      "modifications": "Extracted from Studio embedded geometry; inherited surface/edge colors -1/-2 converted to standard LDraw16/24. Studio7973.dat retained under authored bl_7973.dat alias to avoid collision with an unrelated official part."
+    },
+    {
+      "path": "custom/s/7101s01.dat",
+      "bytes": 2353,
+      "sha256": "c0bc0f0d90e26a351155ed4f8d7820f0af4ada2b50dc55697ea1605ad4f30129",
+      "origin": "model2.ldr#s/7101s01.dat",
+      "modifications": "Extracted from Studio embedded geometry; inherited surface/edge colors -1/-2 converted to standard LDraw16/24."
+    },
+    {
+      "path": "custom/s/7101s02.dat",
+      "bytes": 7906,
+      "sha256": "15fe4164a9cb02296b5dff9ecb9d29c972f6353716642c79d94dea5c8020edcd",
+      "origin": "model2.ldr#s/7101s02.dat",
+      "modifications": "Extracted from Studio embedded geometry; inherited surface/edge colors -1/-2 converted to standard LDraw16/24."
+    },
+    {
+      "path": "custom/s/71682s03.dat",
+      "bytes": 4491,
+      "sha256": "0ac5e8a2dc47f3142e7e1c8a0353ebb9fe5045c0e6490c786d67a21421f53fcb",
+      "origin": "model2.ldr#s/71682s03.dat",
+      "modifications": "Extracted from Studio embedded geometry; inherited surface/edge colors -1/-2 converted to standard LDraw16/24."
+    }
+  ],
+  "sourceBundle": {
+    "path": "cad-source.zip",
+    "format": "zip",
+    "sha256": "6faaad31365e65f669a7a9e5ebe631c63cab34bf0c3fae83ed3c389b1fec6b26",
+    "bytes": 3846501,
+    "fileCount": 442,
+    "cadFileCount": 441,
+    "inventory": "bundle-manifest.json",
+    "contents": [
+      "42239.io",
+      "42239.mpd",
+      "custom/",
+      "ldraw/",
+      "ARCHIVE-NOTICE.md"
+    ],
+    "preservation": "Lossless container; original source bytes, author/license headers and LDraw agreements are retained."
+  }
+}

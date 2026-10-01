@@ -54,6 +54,7 @@ class CarTelemetry:
     boost_pressed: bool = False
     front_lights_pressed: bool = False
     attack_pressed: bool = False
+    wheel_motion: dict[str, Any] | None = None
 
 
 class LiveConsole:

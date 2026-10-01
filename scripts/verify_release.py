@@ -144,7 +144,7 @@ def verify_binary(binary: Path, root: Path = ROOT) -> None:
                     f"{result.stdout}\n{result.stderr}"
                 )
             if arguments == ["--help"]:
-                if "--profiles-json" not in result.stdout or "--frontend" not in result.stdout:
+                if not all(flag in result.stdout for flag in ("--profiles-json", "--frontend", "--discover")):
                     raise ValueError("Frozen bridge help is missing supported commands")
             elif "--profiles-json" in arguments:
                 verify_catalog(result.stdout, expected_profiles(root))

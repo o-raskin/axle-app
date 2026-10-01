@@ -18,7 +18,8 @@ ui/electron/
 
 ## Local Development
 
-Set up the Python bridge from the repository root first:
+Set up the Python bridge from the repository root first, using Python 3.9 or newer
+(release packaging uses Python 3.12):
 
 ```bash
 python3 -m venv lego-env
@@ -44,6 +45,77 @@ hub, run gamepad diagnostics, run the live input probe, and show audio devices. 
 reserved for JSON Lines protocol events in Electron mode; stderr is treated as human diagnostics.
 The main process validates event shapes defensively and forwards structured events to the renderer
 through typed IPC.
+
+On launch, Axle automatically starts the supported Tumbler connection flow: waits for
+Bluetooth, searches for the controller and hub, calibrates PLAYVM, then starts live
+control. Keep the car stationary and its wheels clear during setup. Device loss stops
+motors; the bridge waits and reconnects without a button. If the worker exits, the app
+retries after a short delay. The vehicle picker stays available throughout the flow,
+and Settings also contains the model selection. Only Tumbler is exposed in the desktop
+UI for now; terminal profiles remain unchanged. Selection and connection-setting changes
+stop the old worker before starting the latest selection, including during setup.
+
+The top-right **Exit** button is available in fullscreen and startup/error screens.
+Its touch target is at least 48 pixels high. Exit stops the bridge before closing the
+app on every desktop platform; failed cleanup leaves the window open for another try.
+Keyboard focus uses a subdued indicator; pointer/touch dialog restoration has no ring.
+
+Installed builds check the latest stable [GitHub release](https://github.com/o-raskin/axle-app/releases)
+once at startup. **Help → Check for updates…** retries manually. Development builds
+do not check; `--disable-update-check` also disables checks for offline/automated use.
+An unavailable network never blocks launch. Checks do not interrupt an active vehicle session.
+
+Windows installers and Linux/Steam Deck AppImages download only after confirmation,
+verify the release's SHA-512 checksum, then ask separately before stopping vehicle
+control and restarting to install. Closing Axle normally does not install an update.
+AppImage replacement preserves its existing filename so Steam shortcuts remain valid;
+it requires a writable containing directory. macOS builds have no Apple Developer ID,
+so they offer the matching DMG for manual installation and macOS approval. Linux deb
+installations similarly offer the package for installation through the package manager.
+Only builds containing this feature can check for updates; older builds need one manual upgrade.
+
+Selecting **42239 Batmobile Tumbler** shows a detailed CAD model bundled with the app.
+Editable Studio/LDraw sources, offline conversion tools, references and asset licenses
+live in [models/tumbler](models/tumbler/README.md).
+The CAD/library sources are preserved losslessly in `models/tumbler/source/cad-source.zip`;
+offline conversion reads them directly. `npm run model:extract -- <new directory>`
+restores the editable files, and `npm run model:pack -- <directory>` repacks them.
+Fogeyman's assembly is **CC BY-NC 4.0**, separately from Apache-2.0 application code.
+Read the [model license](models/tumbler/LICENSE.md), [rights gaps](models/tumbler/RIGHTS.md)
+and generated part attribution before redistributing; these records also accompany
+the packaged desktop app. Unidentified Studio geometry and underlying brand/design
+rights have not been independently cleared.
+Drag to orbit, scroll to zoom, or choose a close view; keyboard arrows, plus/minus and Home also
+control the camera. **Follow active part** is enabled by default and moves smoothly between
+cinematic views: rear chase for driving/boost, a left-side view revealing the flashing rear
+green light when reversing, and a wide
+composition for simultaneous front/rear effects. Steering adjusts driving views without
+switching camera sides. Manual camera movement pauses following. Other model profiles retain
+their existing illustration.
+
+The model uses the bridge's resolved steering/throttle commands, braking, front light/flicker
+and independent reverse/boost light flags. Reverse blinking illuminates the two front internal
+green couplers and the rear green assembly. Attack flickers all three green assemblies
+alongside the white headlights, then restores the current reverse-light phase; reduced
+motion shows steady Attack illumination. Only boost illuminates the orange jet lens.
+Wheel rotation now follows drive encoder positions, converted through the real 7/11 rear
+drivetrain ratio. The renderer interpolates measured travel with a 120 ms delay and never
+guesses RPM from throttle. This reflects actual boost, stalls, reversal and coasting. The
+shared differential exposes mean rear-wheel travel; independent wheel speeds during turns
+or slip are not observable. Front tires use the 68.7/56 rolling-diameter ratio.
+Keep the car stationary during connection when possible. Encoder direction is learned
+passively during the first normal drive, without any extra motor commands. If discovery
+finishes after the first trigger press, measured motion itself establishes the baseline.
+Until it is learned,
+or if encoder readings are unavailable, wheel animation pauses. Steering still shows its
+commanded position and attack panels stay fixed. See [wheel feedback](models/tumbler/wheel-feedback.md).
+The bridge rejects encoder samples older than 300 ms. The viewer allows 600 ms total
+measurement/transport age to cover polling and delivery, then pauses wheel motion;
+controls/lights expire after 1.5 seconds without
+matching telemetry. Session changes and disconnect also stop animation.
+Reduced-motion preferences preserve the current steering pose and lights while
+suppressing wheel rotation, light pulses and automatic camera moves. If graphics support is
+unavailable, the driving controls remain usable.
 
 The normal Python CLI remains unchanged and keeps its human terminal UI:
 
@@ -87,9 +159,12 @@ npm run dist:steamdeck   # Linux x64 AppImage target for Steam Deck
 Build platform notes:
 
 - macOS release packaging runs on macOS. Default builds explicitly ad-hoc sign the full bundle,
-  including its frozen helper. Downloaded apps still need a Gatekeeper exception because these
-  builds have no Developer ID or notarization; see the root README. `dist:mac:signed` overrides
-  that identity with `CSC_NAME` (or certificate discovery) when Apple credentials are configured.
+  including its frozen helper. Downloaded apps require approval in **System Settings → Privacy &
+  Security → Open Anyway** because these builds have no Developer ID or notarization; see the
+  [installation steps](../../README.md#start-from-a-release) and the instructions inside the DMG.
+  Keeping builds free of Apple credentials means this approval cannot be removed.
+  `dist:mac:signed` overrides the identity with `CSC_NAME` when Apple credentials are configured;
+  Developer ID signing alone does not replace notarization.
 - Windows packaging runs on Windows x64 and produces an NSIS installer.
 - Linux and Steam Deck AppImage builds should run on Linux x86_64 for runtime compatibility.
 
@@ -99,14 +174,18 @@ system Python or source checkouts; writable bridge files are stored under Electr
 directory. Linux and Steam Deck share one x64 AppImage with a static FUSE runtime, avoiding a host
 FUSE 2 dependency. CI launches the actual AppImage in mounted and extract-and-run modes. macOS CI
 verifies bundle signatures and launches both the mounted DMG app and the extracted ZIP app.
+These runtime checks do not test Finder's first launch of a quarantined download or grant
+Gatekeeper approval.
 
 ## Using the Desktop App
 
-Drive is the main screen. Connect vehicle starts Python's guided discovery and calibration. Keep
-the wheels clear during setup: live controller input begins as soon as the vehicle is ready, and
-the backend resumes automatically after reconnecting. The visible stop action ends the session.
+Drive is the main screen. Connection, calibration, engine startup, and reconnection
+are automatic. Keep the wheels clear: controller input can move the vehicle as soon
+as setup finishes. Use Exit to stop control and close the app.
+`--disable-hardware-discovery` disables automatic hardware startup for isolated/offline
+test runs; it does not permit motor control.
 
-The vehicle card offers a model picker when more than one profile is available. Settings contains
+The vehicle card and Settings offer the supported model picker. Settings contains
 controller selection, fullscreen preference, and Advanced connection overrides. Automatic
 controller detection is the default. Diagnostics is an explicit opt-in surface
 for hub scanning, controller/audio reports, the input probe, raw events, and logs. It preserves the
@@ -142,7 +221,9 @@ state resets in effects is disabled; the app resets bootstrap state when subscri
 The UI fixture runner uses the pinned `playwright-core` dependency and the installed Electron
 executable. It covers narrow layouts, 200% zoom, reduced motion, keyboard focus, reconnect/impact
 states, diagnostics and startup recovery. Generated fixtures never connect to hardware or modify
-saved settings. Linux CI runs this under Xvfb.
+saved settings. It also verifies the real Tumbler canvas, camera movement, steering/wheel/light
+feedback and stale-session isolation. Linux CI runs this under Xvfb; fixture-only software rendering
+allows these checks without a physical GPU.
 
 `test:package` launches the actual installed/extracted app with temporary settings, invalid source
 overrides and a working directory outside the repository. It verifies the embedded version and

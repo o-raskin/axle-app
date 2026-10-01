@@ -1,0 +1,2838 @@
+{
+  "format": 1,
+  "source": "models/tumbler/source/42239.mpd",
+  "sourceSha256": "a0c3ca1e813d8b5be39756d505d96c961e703d4dc099eff1860fe84c50441071",
+  "sourceBundle": {
+    "path": "models/tumbler/source/cad-source.zip",
+    "sha256": "6faaad31365e65f669a7a9e5ebe631c63cab34bf0c3fae83ed3c389b1fec6b26",
+    "bytes": 3846501,
+    "fileCount": 442,
+    "sourcePathMeaning": "source and dependency paths identify logical ZIP members; explicit external overrides retain filesystem paths"
+  },
+  "sourceColorAliases": {
+    "1009021": {
+      "ldraw": "47",
+      "source": "42239.io/model2.ldr: Studio color 12 (Trans Clear)"
+    }
+  },
+  "additions": {
+    "frontGuides": {
+      "part": "40002c06",
+      "lengthMillimeters": 48,
+      "diameterMillimeters": 3.2,
+      "reference": "Official instructions6675742, pages124–125, steps127–128",
+      "qualification": "Coupler anchors follow CAD; free bends and pin placement inferred from instructions."
+    },
+    "graphics": {
+      "reference": "Official instructions6675742, pages53,166,176",
+      "qualification": "Hand-authored geometry approximates muted bat graphic and paired gold instrument circles; no photograph textures."
+    },
+    "source": "models/tumbler/source/axle-details.mjs",
+    "sha256": "ded335572134edbbd19446b927c8063de8b09b471a1c376793f942d133a78df6"
+  },
+  "coordinateSystem": {
+    "forward": "+Z",
+    "up": "+Y",
+    "wheelRoll": "X",
+    "steeringYaw": "Y",
+    "lduScale": 0.0075
+  },
+  "bounds": {
+    "min": [
+      -1.7131177186965942,
+      2.5028490724388064e-7,
+      -2.982823133468628
+    ],
+    "max": [
+      1.7131189107894897,
+      2.1473472118377686,
+      2.983608488471643
+    ],
+    "size": [
+      3.426236629486084,
+      2.147346961552861,
+      5.966431621940271
+    ]
+  },
+  "nodes": {
+    "body": "body",
+    "steering": [
+      "frontSteeringLeft",
+      "frontSteeringRight"
+    ],
+    "wheelSpin": [
+      "wheelFrontLeft",
+      "wheelFrontRight",
+      "wheelRearLeft",
+      "wheelRearRight"
+    ],
+    "frontLights": [
+      "frontLightLeft",
+      "frontLightRight"
+    ],
+    "jetLight": "jetLight",
+    "reverseLights": [
+      "reverseLightFrontLeft",
+      "reverseLightFrontRight",
+      "reverseLightRear"
+    ]
+  },
+  "features": {
+    "frontLightLeft": {
+      "center": [
+        -0.44927123188972473,
+        1.215017020702362,
+        1.4446732997894287
+      ],
+      "min": [
+        -0.4778054356575012,
+        1.1871986389160156,
+        1.4446732997894287
+      ],
+      "max": [
+        -0.42073702812194824,
+        1.2428354024887085,
+        1.4446732997894287
+      ]
+    },
+    "frontLightRight": {
+      "center": [
+        0.4500129520893097,
+        1.215017020702362,
+        1.4448444843292236
+      ],
+      "min": [
+        0.42219454050064087,
+        1.1871986389160156,
+        1.4448444843292236
+      ],
+      "max": [
+        0.4778313636779785,
+        1.2428354024887085,
+        1.4448444843292236
+      ]
+    },
+    "jetLight": {
+      "center": [
+        -0.00029686465859413147,
+        0.9526876509189606,
+        -2.832518458366394
+      ],
+      "min": [
+        -0.09779667109251022,
+        0.8546834588050842,
+        -2.982823133468628
+      ],
+      "max": [
+        0.09720294177532196,
+        1.050691843032837,
+        -2.68221378326416
+      ]
+    },
+    "reverseLightFrontLeft": {
+      "center": [
+        -0.4500003904104233,
+        1.0682351291179657,
+        0.46864446997642517
+      ],
+      "min": [
+        -0.5250003933906555,
+        0.9922967553138733,
+        0.16826826333999634
+      ],
+      "max": [
+        -0.37500038743019104,
+        1.144173502922058,
+        0.769020676612854
+      ]
+    },
+    "reverseLightFrontRight": {
+      "center": [
+        0.44999954104423523,
+        1.0683093965053558,
+        0.4687955155968666
+      ],
+      "min": [
+        0.3749995231628418,
+        0.9923710227012634,
+        0.16841931641101837
+      ],
+      "max": [
+        0.5249995589256287,
+        1.1442477703094482,
+        0.7691717147827148
+      ]
+    },
+    "reverseLightRear": {
+      "center": [
+        -0.4499996453523636,
+        1.0929388403892517,
+        -1.7661696672439575
+      ],
+      "min": [
+        -0.5249994993209839,
+        1.0160194635391235,
+        -2.111304998397827
+      ],
+      "max": [
+        -0.3749997913837433,
+        1.1698582172393799,
+        -1.421034336090088
+      ]
+    }
+  },
+  "pivots": {
+    "wheelFrontLeft": [
+      -0.676624291066123,
+      0.524166536276576,
+      2.4599628490520873
+    ],
+    "wheelFrontRight": [
+      0.673363033933877,
+      0.5241621862765758,
+      2.4599500990520875
+    ],
+    "wheelRearLeft": [
+      -1.080137041066123,
+      0.6472670362765759,
+      -2.160799900947912
+    ],
+    "wheelRearRight": [
+      1.079862958933877,
+      0.6480170362765759,
+      -2.160799900947912
+    ]
+  },
+  "geometry": {
+    "triangles": 902918,
+    "vertices": 983294,
+    "drawCalls": 32,
+    "sourceMeshes": 744,
+    "materials": 25
+  },
+  "dependencies": {
+    "custom/103479c01-3.dat": {
+      "sha256": "404a1ec8942ce84c8a2730a23baa67e12367d0510d64cce6737d62b5bcdae1c6",
+      "bytes": 5270345,
+      "author": null,
+      "license": null
+    },
+    "custom/69790.dat": {
+      "sha256": "3a96c2e174d7859f31bf571bfc2a80d159a9532810521e57546db445dc795ade",
+      "bytes": 377420,
+      "author": null,
+      "license": null
+    },
+    "custom/7101.dat": {
+      "sha256": "f18fff7a161ea1268f017f1f36899a7b8e7462fad802e1b7fbc69d098c990c9a",
+      "bytes": 1156,
+      "author": "Gerald Lasser [GeraldLasser]",
+      "license": null
+    },
+    "custom/7655.dat": {
+      "sha256": "7ea9779ab708a68ec6a1c5efeff6884e7f073d21e7d3a8296115ec7cc2dd9820",
+      "bytes": 457765,
+      "author": null,
+      "license": null
+    },
+    "custom/7683.dat": {
+      "sha256": "95272eb3d530cdfac569165e440b69b5c6bc0b9065734c5ba51fc23388111b9c",
+      "bytes": 824585,
+      "author": null,
+      "license": null
+    },
+    "custom/bl_7973.dat": {
+      "sha256": "25aeba279450f846d805ecb6394268c76cfa044f4e3135f6403206a77f740aa5",
+      "bytes": 69218,
+      "author": null,
+      "license": null
+    },
+    "custom/s/7101s01.dat": {
+      "sha256": "c0bc0f0d90e26a351155ed4f8d7820f0af4ada2b50dc55697ea1605ad4f30129",
+      "bytes": 2353,
+      "author": "Gerald Lasser [GeraldLasser]",
+      "license": null
+    },
+    "custom/s/7101s02.dat": {
+      "sha256": "15fe4164a9cb02296b5dff9ecb9d29c972f6353716642c79d94dea5c8020edcd",
+      "bytes": 7906,
+      "author": "Jens Brühl [jb70]",
+      "license": null
+    },
+    "custom/s/71682s03.dat": {
+      "sha256": "0ac5e8a2dc47f3142e7e1c8a0353ebb9fe5045c0e6490c786d67a21421f53fcb",
+      "bytes": 4491,
+      "author": "Gerald Lasser [GeraldLasser]",
+      "license": null
+    },
+    "ldraw/LDConfig.ldr": {
+      "sha256": "0178cd14fba46acb9df049c835e60e223b134d178f7e928ace0be1dfbe78895d",
+      "bytes": 66493
+    },
+    "ldraw/p/1-16chrd.dat": {
+      "sha256": "e429dd760eb6f0cf460a74e6ebf52c023bedbdea82de7801efa1694b5a1a82e8",
+      "bytes": 701,
+      "author": "Philippe Hurbain [Philo]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/1-16cyli.dat": {
+      "sha256": "b60f031d9dfd0995c1741992a5695ee3789419886e8189dead961d05f75f7bfc",
+      "bytes": 693,
+      "author": "Marc Klein [marckl]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/1-16cylo.dat": {
+      "sha256": "6cef884c4f96ec15f5bd1428264af2efba4443cb1e47ead116a8a094febefc67",
+      "bytes": 394,
+      "author": "Max Martin Richter [MMR1988]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/1-16edge.dat": {
+      "sha256": "42fc4d69af1281b71cb2eb9546e99e8bca2fc231d05a0379e71d4e1c9a60c95c",
+      "bytes": 506,
+      "author": "Marc Klein [marckl]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/1-16ring2.dat": {
+      "sha256": "c8fd7bff229ffc832496ae5e7e1bcbb0c246629abbf72a660699772ab87d91a6",
+      "bytes": 419,
+      "author": "Steve Bliss [sbliss]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/1-16tang.dat": {
+      "sha256": "3bf6430f99195afabdaaab755a660c0978080851fd6f514f50ef0e578e6f82e2",
+      "bytes": 309,
+      "author": "Gerald Lasser [GeraldLasser]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/1-4chrd.dat": {
+      "sha256": "ccba3a97b5cc358754e476b78b4ce61cce5f404cd15e37471b73df3e81784aec",
+      "bytes": 743,
+      "author": "Max Martin Richter [MMR1988]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/1-4con3.dat": {
+      "sha256": "c68d5c616332fbf15f3f22519bab843bdb897bf29e28709fb02ef2dcd63a0e2f",
+      "bytes": 1314,
+      "author": "Steve Bliss [sbliss]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/1-4cyli.dat": {
+      "sha256": "5a7168952a5a3570327873b9a5802fa7b3be40967ab78c03b6a2bfd4419a1f10",
+      "bytes": 1044,
+      "author": "James Jessiman",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/1-4cylo.dat": {
+      "sha256": "792a01362608c3f385dd7f01a1bd7d19cf9ed8a40f793266345cc86d1d98f3af",
+      "bytes": 388,
+      "author": "Max Martin Richter [MMR1988]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/1-4cyls.dat": {
+      "sha256": "aaee6ffe6e4a191d6cad4496677132eb0349303d6e48c13c7a2240dcea1db621",
+      "bytes": 1107,
+      "author": "James Jessiman",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/1-4cyls2.dat": {
+      "sha256": "77a3bf3859fa972a5d047721ef18603694f1a6f83543f955240990be9c9ee9bd",
+      "bytes": 1189,
+      "author": "Chris Dee [cwdee]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/1-4disc.dat": {
+      "sha256": "3b8faa77185c576085c38f37b13c6a04e2e889eea6a7dc8c4db2d1699a33bcda",
+      "bytes": 584,
+      "author": "James Jessiman",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/1-4edge.dat": {
+      "sha256": "9ce2de7e67bbac575d52cfdc771b9d00856efc9b88002d97db8e665e50f4d467",
+      "bytes": 545,
+      "author": "James Jessiman",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/1-4ering.dat": {
+      "sha256": "0247cb75ef91d1153cc6aec7d6a3a3c50fa64b8dee22c02b3f39c78b416998db",
+      "bytes": 826,
+      "author": "Steffen [Steffen]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/1-4ndis.dat": {
+      "sha256": "ff6685838636e7ab6152356d8f09e4f00a38af0d878b0881423f5c45fb868f0c",
+      "bytes": 692,
+      "author": "James Jessiman",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/1-4ring12.dat": {
+      "sha256": "0ff1a27681d9f28da3cc1e382f94597090389646a92b7d044b8c4999c024a1e4",
+      "bytes": 1012,
+      "author": "Franklin W. Cain [fwcain]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/1-4ring2.dat": {
+      "sha256": "98a52c605fc13721f1e86030f67c4233587c8c80243ce8c0889cdc8147894207",
+      "bytes": 882,
+      "author": "Franklin W. Cain [fwcain]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/1-4ring3.dat": {
+      "sha256": "4048b121d53509363cfaa7422648dd29b2eeb93074279feb0bcc7a45bbb7c2e1",
+      "bytes": 1198,
+      "author": "Willy Tschager [Holly-Wood]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/1-4ring6.dat": {
+      "sha256": "a9e3166db4cd6769e0f5e63421f791351184d13db5353d0d7f6b98e478e8b43b",
+      "bytes": 882,
+      "author": "Franklin W. Cain [fwcain]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/1-4ring7.dat": {
+      "sha256": "c58f1ebaec67452bbdf41be056b371a61c79c2a0fa5327c37e3e88d453b8bc5d",
+      "bytes": 850,
+      "author": "Franklin W. Cain [fwcain]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/1-4ring8.dat": {
+      "sha256": "670d5b738c8947233d3c7805ae42994116eec77a73c39d2f5a0d548d7aa5f80f",
+      "bytes": 724,
+      "author": "Franklin W. Cain [fwcain]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/1-4tang.dat": {
+      "sha256": "4eb5b51b824675756efd7e74e1141aaeaa9520517754d3bd0cfc1f591a0e04b4",
+      "bytes": 585,
+      "author": "Willy Tschager [Holly-Wood]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/1-8chrd.dat": {
+      "sha256": "7694157b725563188a6efd69b3f558b00533b375b8a4e82f469497a03e471e74",
+      "bytes": 561,
+      "author": "Orion Pobursky [OrionP]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/1-8con3.dat": {
+      "sha256": "f964c471284eb4dafa0e9668bfc5721b6d299e4decb1c3ed268d0bc01b08130c",
+      "bytes": 749,
+      "author": "Willy Tschager [Holly-Wood]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/1-8cyli.dat": {
+      "sha256": "46def63dc8293ad9a2dd1d1a5cb720b9ba883850e65d3280d2093c664a6140c4",
+      "bytes": 806,
+      "author": "James Jessiman",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/1-8cylo.dat": {
+      "sha256": "870bbbf6052e075598de7dce7efe7a139ea5189820e7a296442fe2b3318c18bf",
+      "bytes": 381,
+      "author": "Tim Gould [timgould]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/1-8edge.dat": {
+      "sha256": "50436a0bce461198c342dccbccb658a1bffae13e44b7c48689b158c946c2c2ab",
+      "bytes": 480,
+      "author": "James Jessiman",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/1-8ndis.dat": {
+      "sha256": "97e394834789794c8635261fa604ad8e69b4c6872d0cd8d7506408b80023f408",
+      "bytes": 615,
+      "author": "James Jessiman",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/1-8ring2.dat": {
+      "sha256": "e455551969062c34d061d1b74df9b18f63deffb3efdbeb175a4a80a674f5ff68",
+      "bytes": 791,
+      "author": "Willy Tschager [Holly-Wood]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/1-8ring3.dat": {
+      "sha256": "641f3ae7395e7d38e57ab918928ac19209ed72e8474fd1646e2d70f223c4a0ce",
+      "bytes": 610,
+      "author": "Paul Easter [pneaster]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/1-8ring8.dat": {
+      "sha256": "6166b3c447f674cfb20d21eb4fcaa5e3c0ab20d9aee25a1c6d981f38ec09e496",
+      "bytes": 610,
+      "author": "Paul Easter [pneaster]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/1-8ring9.dat": {
+      "sha256": "315a78ca5138394333b62197ed7552aa4acd69d470f054b59a5ac06cb04427f9",
+      "bytes": 600,
+      "author": "Steffen [Steffen]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/1-8sphe.dat": {
+      "sha256": "c38f9b8df6f260a26e920d8bbfb2d6b11667026e0675733d7fc2d3653ef92c53",
+      "bytes": 4040,
+      "author": "James Jessiman",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/1-8tang.dat": {
+      "sha256": "4f412bd10e7dd081272e6fcbf7480674b639d48e35437c6d006f5bad099e4af6",
+      "bytes": 419,
+      "author": "Steffen [Steffen]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/1-8tndis.dat": {
+      "sha256": "5e3bd48d2e7565fc97a8936255339d9682897b43a38f69da43571f42a4a2248e",
+      "bytes": 346,
+      "author": "Massimo Maso [Sirio]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/11-16cyli.dat": {
+      "sha256": "6763716ab47ebf0a16e8b40e6f1a74a32633ea22489bfc07f0e235c0bbf691bc",
+      "bytes": 1924,
+      "author": "Willy Tschager [Holly-Wood]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/11-16edge.dat": {
+      "sha256": "1bf8fadea1634856d2ff42b4029da1a23f8bfadacdc332e745ffa783ec0ef4d4",
+      "bytes": 818,
+      "author": "Willy Tschager [Holly-Wood]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/2-4chrd.dat": {
+      "sha256": "3b0dfcf2cb881fae0acfe1e53b703104768878636477e540d0c893fc3fd87f8f",
+      "bytes": 490,
+      "author": "Philippe Hurbain [Philo]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/2-4cylc.dat": {
+      "sha256": "a5b68e5d662209f4139803034f45330ba677b1aff449fb609d95a6f27ddc5469",
+      "bytes": 428,
+      "author": "Alex Taylor [anathema]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/2-4cyli.dat": {
+      "sha256": "d486780f0f84893899d9eadcd13150f13a42e15e77a3cda38cdf24ded98862c6",
+      "bytes": 1543,
+      "author": "James Jessiman",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/2-4cylo.dat": {
+      "sha256": "4fa9f597d775c7f15e3fc66f60e20d914134d13004b485488b7dbff684776232",
+      "bytes": 387,
+      "author": "Max Martin Richter [MMR1988]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/2-4disc.dat": {
+      "sha256": "1d4662b73e3196fadeb5ecf2fd27f3dbf7cecce0802cf3d7108ab67bb380eb15",
+      "bytes": 803,
+      "author": "James Jessiman",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/2-4edge.dat": {
+      "sha256": "665400f76566b161c28303cdadce40d17d979a8ff9a8a133675af2d17fbe6763",
+      "bytes": 683,
+      "author": "James Jessiman",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/2-4ering.dat": {
+      "sha256": "4311c26fa10c3a56432a016a603ee03e42e987f0976e50bf596bb0ef6dd41733",
+      "bytes": 1084,
+      "author": "Damien Roux [Darats]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/2-4ndis.dat": {
+      "sha256": "7557eae598be3f530b840471535198e6b07b03486ffbcc18a00e862c3d25d925",
+      "bytes": 874,
+      "author": "James Jessiman",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/2-4ring13.dat": {
+      "sha256": "ad63e1cf952596c88cdf38571e53f3b806f782278437f2bfe90c49d670b22acf",
+      "bytes": 952,
+      "author": "Willy Tschager [Holly-Wood]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/2-4ring16.dat": {
+      "sha256": "9700b5a8ff7a63e4b9bc47e391647c4d8273b081a26de6f7b7490d13c1a21434",
+      "bytes": 898,
+      "author": "Donald Sutter [technog]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/2-4ring2.dat": {
+      "sha256": "dc1748fff34bb0cae3ba1d480921c2f73de4ea1d0532799356b2014a28c8f393",
+      "bytes": 977,
+      "author": "Chris Dee [cwdee]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/2-4ring25.dat": {
+      "sha256": "84f55f7949ea878077efb0d7b9c805b50a034a3007fa3ec66d5c6077140a9a1a",
+      "bytes": 898,
+      "author": "Alex Taylor [anathema]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/2-4ring3.dat": {
+      "sha256": "045613f5bb90e0c283211b1fa261cc66f8ee8ab968dc9763222e7e592cbf83fc",
+      "bytes": 1159,
+      "author": "James Jessiman",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/2-4ring6.dat": {
+      "sha256": "e51be9ca0a1c92c838f4b188a2fffad612e1309ac3a3234afaaeb640a45fd226",
+      "bytes": 983,
+      "author": "Niels Karsdorp [nielsk]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/2-4ring8.dat": {
+      "sha256": "e8f7ef17c0d9a9aa11b3ee09f46113f0e0c6d529fd6c24df2b2c74e8eaad6a9c",
+      "bytes": 925,
+      "author": "Willy Tschager [Holly-Wood]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/2-4ring9.dat": {
+      "sha256": "66c4444b0d30e8b1cb0b1a3aa0e472e28750462cb55d2c43fadcd2e14b852f36",
+      "bytes": 907,
+      "author": "Willy Tschager [Holly-Wood]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/2-8sphe.dat": {
+      "sha256": "63a1d64d6c27e64ace1fe6e5233aef04f7af15e39c6e1d36717dfe5c6d226c3a",
+      "bytes": 537,
+      "author": "James Jessiman",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/3-16chrd.dat": {
+      "sha256": "2bb493e8b5b56a5d63bfa7356a0ed5d6403a68e5e9a983e13a57541783ad19c1",
+      "bytes": 317,
+      "author": "Niels Karsdorp [nielsk]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/3-16con1.dat": {
+      "sha256": "f5c22eb527113a6332c0ae75df1e64476728ac85cc221f1ccc52ab20aa342783",
+      "bytes": 891,
+      "author": "Willy Tschager [Holly-Wood]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/3-16cyli.dat": {
+      "sha256": "f50d12a37a22ae4a5f37a017b8e39d1e729577b0a4aa376ca685b210806b49c8",
+      "bytes": 942,
+      "author": "Mark Kennedy [mkennedy]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/3-16cylo.dat": {
+      "sha256": "a5c8370842299035a9cc14308301614c6fb169fb873a7950c888928cd8d9181c",
+      "bytes": 386,
+      "author": "J.C. Tchang [tchang]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/3-16edge.dat": {
+      "sha256": "c08dd83bb7fe90b61f7cd0b10ebef0d9a9ba33b497676dedd2e2e968cb8248f9",
+      "bytes": 586,
+      "author": "Donald Sutter [technog]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/3-16ndis.dat": {
+      "sha256": "abb7da370e72fe9e75faf5d10c637b476202dbd8ced9cb5b0f96433e1f72f529",
+      "bytes": 557,
+      "author": "Magnus Forsberg [MagFors]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/3-16ring2.dat": {
+      "sha256": "39481beacecc688590dff4d877e177657d133fbaee449ad60f346c18ccce3d3d",
+      "bytes": 580,
+      "author": "Philippe Hurbain [Philo]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/3-16ring8.dat": {
+      "sha256": "7898472be0666e13c955dd835d563eaf2e3fe4b32d7ba81bcf615a2df01e4a0d",
+      "bytes": 595,
+      "author": "Philippe Hurbain [Philo]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/3-16tndis.dat": {
+      "sha256": "013e74f7eb727ad92396676544e09a80994a05200ba3a2c3ec1e6597b90bf892",
+      "bytes": 392,
+      "author": "Massimo Maso [Sirio]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/3-4cyli.dat": {
+      "sha256": "4a54732476cf4eaad2c9f7b40a3cef24db025132004328e4e84c0666cd217533",
+      "bytes": 2031,
+      "author": "James Jessiman",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/3-4edge.dat": {
+      "sha256": "d7f5aff979bc227b601abbb8e0226d6055d08eafb5faaf507b3055f712cd4c04",
+      "bytes": 831,
+      "author": "James Jessiman",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/3-4ndis.dat": {
+      "sha256": "c343cdb5d839040d346818adc6aa39586338c5b0a6a9d2ab7162c60e4caba5f0",
+      "bytes": 1053,
+      "author": "James Jessiman",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/3-4ring2.dat": {
+      "sha256": "9ef881ae14ff1d311865994ede3409ef9ce162890981bfbdd860384661c37f1a",
+      "bytes": 1119,
+      "author": "Mark Kennedy [mkennedy]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/3-8con4.dat": {
+      "sha256": "4a96e03c6bef7b63038890b1ce78c94d19a39efee3ba04ad0693e944f1b6b8a5",
+      "bytes": 1094,
+      "author": "J.C. Tchang [tchang]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/3-8con6.dat": {
+      "sha256": "5215b1a6ff929f04d568a1dbaeefd98de433ecd813a4ad4aea3d554c4c6973d6",
+      "bytes": 1101,
+      "author": "Philippe Hurbain [Philo]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/3-8con9.dat": {
+      "sha256": "27b84a08a73890c35783849f58c7b3225fe0cd8d639d28c1cd2603d8b456c494",
+      "bytes": 1072,
+      "author": "Philippe Hurbain [Philo]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/3-8cyli.dat": {
+      "sha256": "9224d4e5edc6f5b0f75f6fa358fd1368a4fd65f676b74fe1bb6e3bbb05046206",
+      "bytes": 1303,
+      "author": "James Jessiman",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/3-8cylo.dat": {
+      "sha256": "f5e90ea29201b4cea569e2effe32eee5fe95146e3eadcddc054a881ef4f839bd",
+      "bytes": 381,
+      "author": "J.C. Tchang [tchang]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/3-8edge.dat": {
+      "sha256": "a590f230678d592d514a9c5e307c6a30945e50e4c529fc06accf37530d0e0ed5",
+      "bytes": 615,
+      "author": "James Jessiman",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/3-8ring12.dat": {
+      "sha256": "3480b87412d6592fcbcfbbea7e1c1120c63b13b96a88bf64a0cbc689ce2aec00",
+      "bytes": 986,
+      "author": "Niels Karsdorp [nielsk]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/3-8ring2.dat": {
+      "sha256": "c65d4b41084dd68c63f74ca1f92d7ae9e7a79e5b1632823f24739f3ff8196691",
+      "bytes": 934,
+      "author": "Willy Tschager [Holly-Wood]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/3-8ring6.dat": {
+      "sha256": "0cf20ca63e4428e0c7e6c9b54933845d1354b584546b53304455235012457477",
+      "bytes": 801,
+      "author": "Willy Tschager [Holly-Wood]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/3-8ring7.dat": {
+      "sha256": "6749b6c145c24a89f14200dc025e716f9c2880f5099689907caf6ce5b6236b90",
+      "bytes": 801,
+      "author": "Willy Tschager [Holly-Wood]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/3-8ring8.dat": {
+      "sha256": "b0402520ad7ae5786bd5a4cb992951d9a476e5802badc2a2a4fe9a43478a8572",
+      "bytes": 801,
+      "author": "Willy Tschager [Holly-Wood]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/3-8ring9.dat": {
+      "sha256": "fac36be847da18223f84b860cfba4e44f6e497bbb0a61b4883b6df6485c2a55a",
+      "bytes": 786,
+      "author": "Willy Tschager [Holly-Wood]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/4-4con0.dat": {
+      "sha256": "b9e568215ff9786203c7d8e7ee4b7f99b72222a097c7663c732c4ecae77eaf9c",
+      "bytes": 1814,
+      "author": "Willy Tschager [Holly-Wood]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/4-4con13.dat": {
+      "sha256": "340b30ba8205ef76e4457aaba4620b9a1a2ad13e14bbcacac63dae1dd224812d",
+      "bytes": 2435,
+      "author": "Michael Heidemann [mikeheide]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/4-4con3.dat": {
+      "sha256": "1aed96f9d90a36758bb299c01db21f8fd795a4734bcd605171c76ea61116697e",
+      "bytes": 2426,
+      "author": "Niels Karsdorp [nielsk]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/4-4con4.dat": {
+      "sha256": "7c49737dec9819a49e43d7af5926c05d8a1a1226bc0f2cb15cbe7cddb035f00b",
+      "bytes": 2722,
+      "author": "Willy Tschager [Holly-Wood]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/4-4con5.dat": {
+      "sha256": "b2d6eb9f4a94b4440d5bbe4793a9f8f1b06a9d5e3bd0df8ea04260e808ae8798",
+      "bytes": 2424,
+      "author": "Niels Karsdorp [nielsk]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/4-4con6.dat": {
+      "sha256": "f1aebd7f8392303233d70be2d74800008e58069c3b5c9c198b790a22bcd1a925",
+      "bytes": 2426,
+      "author": "Niels Karsdorp [nielsk]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/4-4con7.dat": {
+      "sha256": "a1041c95280f6b9551e6171d8090cb4e0f0dbec7a9a85fa5bb71d0a613827696",
+      "bytes": 2426,
+      "author": "Niels Karsdorp [nielsk]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/4-4con8.dat": {
+      "sha256": "9c5ccecc4d79097dc58c4c67d095bcddd0c307a40239dac29e8bf780f46709df",
+      "bytes": 2626,
+      "author": "Steve Bliss [sbliss]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/4-4con9.dat": {
+      "sha256": "c13514575a12e7b698cc7c88dcc3b5f5c34689fe05383c211e4e0df74ec4a220",
+      "bytes": 2662,
+      "author": "Willy Tschager [Holly-Wood]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/4-4cyl1sph2.dat": {
+      "sha256": "5899ab994c9e2c2a6ed54f01d195c3ff2990f617b64243c06e6b53abfbb3771a",
+      "bytes": 1554,
+      "author": "Magnus Forsberg [MagFors]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/4-4cylc.dat": {
+      "sha256": "0183cffc7f56a2f3e5e3511f0d07ac484d3039c2d41bee802a94344ec95ec8bd",
+      "bytes": 476,
+      "author": "Alex Taylor [anathema]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/4-4cyli.dat": {
+      "sha256": "4a742c2765b6ebf98245baaf8a160a4ff587fc93d36c8ee2b9074712a2f968c4",
+      "bytes": 2687,
+      "author": "James Jessiman",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/4-4cylo.dat": {
+      "sha256": "d6ca97ee2e75918b3309a5c88aafcd2455b3a316f7cef8963517c19f1d86b38f",
+      "bytes": 383,
+      "author": "Mark Kennedy [mkennedy]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/4-4disc.dat": {
+      "sha256": "a00b5547776f61a7389d303616987c76b3c4de86ad8ec32f22857e1bd5e5e40f",
+      "bytes": 1137,
+      "author": "James Jessiman",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/4-4edge.dat": {
+      "sha256": "54a52196e421fd1717d291ff52ea57553b1fb238907c1678cc1f1a84c698b1da",
+      "bytes": 1084,
+      "author": "James Jessiman",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/4-4ering.dat": {
+      "sha256": "115b0158afebc9307ba47cb35673b26d97a1fa1a2d362f9b389d89aea703b72d",
+      "bytes": 1591,
+      "author": "Philippe Hurbain [Philo]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/4-4ndis.dat": {
+      "sha256": "21202dc15823f4336bc2544244d0b539b76745c89f7a59ad18cdd03ad45cc543",
+      "bytes": 1219,
+      "author": "James Jessiman",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/4-4ring1.dat": {
+      "sha256": "4ae21061a6d0c9c80c608decb750f16fe1d113d84e08ef2f6082bcbb0f55194c",
+      "bytes": 1641,
+      "author": "James Jessiman",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/4-4ring12.dat": {
+      "sha256": "3308fbae0dbb0ac056ed5322a416e37ef39ae9200201cc71cbe6e81ec504a1b4",
+      "bytes": 1629,
+      "author": "Willy Tschager [Holly-Wood]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/4-4ring13.dat": {
+      "sha256": "b108a3a9ccd1228e82c59ce2025b61620ade4edd086ae50340546a05ac9825eb",
+      "bytes": 1630,
+      "author": "Willy Tschager [Holly-Wood]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/4-4ring2.dat": {
+      "sha256": "6fb38804b1f5e9bee8c0b80caf1397b09454fc58b048dc19045b6f37c8762ab0",
+      "bytes": 1628,
+      "author": "James Jessiman",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/4-4ring25.dat": {
+      "sha256": "63736256f007073c8e2eae18302fcc0170de7897c8acfd9b907655bcc3e750bd",
+      "bytes": 1530,
+      "author": "Willy Tschager [Holly-Wood]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/4-4ring3.dat": {
+      "sha256": "1f2835ac308154edc2d6f479d8e742a55be981f6167b20bfa100c195bc0731dd",
+      "bytes": 1628,
+      "author": "James Jessiman",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/4-4ring4.dat": {
+      "sha256": "e046737f05ca843c7fc32bbfe9f5b26f3409c5b42b786d8809aa789faf761154",
+      "bytes": 1640,
+      "author": "James Jessiman",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/4-4ring5.dat": {
+      "sha256": "ca5a04efffaad8671c935fed492ee397b1b91f854079257b033e87fcca3580b1",
+      "bytes": 1773,
+      "author": "Mark Kennedy [mkennedy]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/4-4ring6.dat": {
+      "sha256": "d47607450c3e7c3efb472d11ab9a4fc0941982c7eacd152a3f1988fa536574c8",
+      "bytes": 1577,
+      "author": "Mark Kennedy [mkennedy]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/4-4ring8.dat": {
+      "sha256": "4d7ae146c56385df78fb08391c29f72a106355ffe4b7be472461899ebff840ca",
+      "bytes": 1499,
+      "author": "Steffen [Steffen]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/4-4ring9.dat": {
+      "sha256": "f1b98f891616369b58e4ff5d25ba9598ff7ef71b63e72cf3c500e72540390efb",
+      "bytes": 1533,
+      "author": "Magnus Forsberg [MagFors]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/4-8sphe.dat": {
+      "sha256": "37fa33d0b13605e0e1a84b8e0917953d42beebee08dc444e1bd44015acd64d9e",
+      "bytes": 623,
+      "author": "James Jessiman",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/48/1-12chrd.dat": {
+      "sha256": "fe2a0252d971dc65126755c4fdb7db900e229dfdce712b42ce9510c7b0390e26",
+      "bytes": 539,
+      "author": "Willy Tschager [Holly-Wood]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/48/1-12cyli.dat": {
+      "sha256": "a645a42a5ed912a059a9336ab1449d02efd067008f034549cc8c5ae488159fd3",
+      "bytes": 1027,
+      "author": "Willy Tschager [Holly-Wood]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/48/1-12edge.dat": {
+      "sha256": "c1320fa098058f1bb4bb73a4bd02a9533bdcc4f22ac4a0f0a1dcd5cdf85deaed",
+      "bytes": 584,
+      "author": "Willy Tschager [Holly-Wood]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/48/1-16chrd.dat": {
+      "sha256": "612846540dad896fa0610b5f7eb9ec1f7a39c0bbbd68dd7e3a9114da1737173d",
+      "bytes": 419,
+      "author": "Michael Heidemann [mikeheide]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/48/1-16cyli.dat": {
+      "sha256": "b6fb5e76f958a18c4cc88866d5e6a0502b62d3abda1a72450663b82502645330",
+      "bytes": 908,
+      "author": "Willy Tschager [Holly-Wood]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/48/1-16cylo.dat": {
+      "sha256": "94929f851cefec060fcf3222213a1f9743f9b6549a9e7bbcf471482dc546a827",
+      "bytes": 416,
+      "author": "Max Martin Richter [MMR1988]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/48/1-16edge.dat": {
+      "sha256": "9b3b4df68d3c0d68fd3e5c52346871867043f67522e53aaa21991562c89bdc10",
+      "bytes": 550,
+      "author": "Willy Tschager [Holly-Wood]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/48/1-24cyli.dat": {
+      "sha256": "5e767152f719b094442a5e68060781c9f2b7304595c6956bf98183bda00a9a36",
+      "bytes": 537,
+      "author": "Niels Karsdorp [nielsk]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/48/1-24edge.dat": {
+      "sha256": "0946112b54d72f44d95d9f48b652bec53468f05eaacb2503ca09f58bee518e04",
+      "bytes": 630,
+      "author": "Willy Tschager [Holly-Wood]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/48/1-4con27.dat": {
+      "sha256": "d1f3391f7ba638728f2fe2c61637a8fb183e5421888d826abd4bd8b5b4f8c4d1",
+      "bytes": 2004,
+      "author": "Massimo Maso [Sirio]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/48/1-4con28.dat": {
+      "sha256": "1db623d7fdeb467aacb68a9b50f2632cef9e8b13f101a62823d161cf064fa782",
+      "bytes": 2033,
+      "author": "Michael Heidemann [mikeheide]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/48/1-4cyli.dat": {
+      "sha256": "e2ed297feaf608b7319c2e54cd81dcb653fbb3d87b5a8e48ab2f54b32953fc6b",
+      "bytes": 2413,
+      "author": "Magnus Forsberg [MagFors]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/48/1-4edge.dat": {
+      "sha256": "e4ebabd21711f16411b3c8b8b278995a56c5f25919cd424976357da5b19943c6",
+      "bytes": 1196,
+      "author": "Magnus Forsberg [MagFors]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/48/1-4ring9.dat": {
+      "sha256": "08cf8697a97526c9636b00578b792ef8452d3f74d7615e3a1d5644417908b42a",
+      "bytes": 1374,
+      "author": "Paul Easter [pneaster]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/48/1-4tang.dat": {
+      "sha256": "98c733eb55ab01082b1dbaebb6f52a13ba96fe0d243c6b94e5dcf6674de5f6eb",
+      "bytes": 932,
+      "author": "Willy Tschager [Holly-Wood]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/48/1-6cyli.dat": {
+      "sha256": "e6acc0794a9b5e6bd2a0e59fa408903077d97179e8bb5dbd7f57c2dc30042e9c",
+      "bytes": 1758,
+      "author": "Mark Kennedy [mkennedy]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/48/1-6edge.dat": {
+      "sha256": "91d8e78d97ae0ae1e0a21d7b1c7d2e50ee931d9eee798b3f9d0cff5034369ab9",
+      "bytes": 809,
+      "author": "Mark Kennedy [mkennedy]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/48/1-6ring18.dat": {
+      "sha256": "f28b8087d78954b05975c0181c56fa038308f201968c5031d0a887f0bd49223a",
+      "bytes": 939,
+      "author": "Santeri Piippo [arezey]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/48/1-6ring8.dat": {
+      "sha256": "7d4510bcea3926ccff8d778bedd1225049a85da3170816b77127545d05103628",
+      "bytes": 779,
+      "author": "Alex Taylor [anathema]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/48/1-8chrd.dat": {
+      "sha256": "282b0d7dd4e73d273b9cbcce88e30889cce3b44aa8574a25382fe526248d5426",
+      "bytes": 611,
+      "author": "Willy Tschager [Holly-Wood]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/48/1-8cyli.dat": {
+      "sha256": "494069ca353e41885bf8f5b6b3ddc9b62aabeca3eedfe6aa5597ac8f12ca12b9",
+      "bytes": 1361,
+      "author": "Steve Bliss [sbliss]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/48/1-8cylo.dat": {
+      "sha256": "bc5df94184d568c4b032959d7ec8fb138adc17acf14d8f9b4d41b69e96bc9f5f",
+      "bytes": 411,
+      "author": "Max Martin Richter [MMR1988]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/48/1-8edge.dat": {
+      "sha256": "eec30153f06bac336ca71ae16b31c5d0c7ae432acb5e91befe37fdb7b6bb1c8e",
+      "bytes": 711,
+      "author": "[PTadmin]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/48/2-4aring.dat": {
+      "sha256": "1a382ccd6762b08b72ff0a471e98f3fb93cc0607c8fbb979a977281bc237c01e",
+      "bytes": 804,
+      "author": "Santeri Piippo [arezey]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/48/2-4cyli.dat": {
+      "sha256": "685652b02ba31d357cb53ab845f0256a3d1580f530d28e57e9a34fe00e82111b",
+      "bytes": 3676,
+      "author": "Willy Tschager [Holly-Wood]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/48/2-4cylo.dat": {
+      "sha256": "8664bb8070cc7b44b3f60c6dde9c3a96b2ef5f20e6585d340d543441d356e50c",
+      "bytes": 405,
+      "author": "Philippe Hurbain [Philo]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/48/2-4edge.dat": {
+      "sha256": "e059b74394567300989a6189e8db33f885334455c20137f27b4739bf424042f5",
+      "bytes": 619,
+      "author": "Paul Easter [pneaster]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/48/3-16con1.dat": {
+      "sha256": "cdf9051b09c34f0a4588eac8ed741648a2b24dfd498725b10b37faf2850617b4",
+      "bytes": 1532,
+      "author": "Philippe Hurbain [Philo]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/48/3-16edge.dat": {
+      "sha256": "9db5a2634d599770c8bd3f3f7dc790e0198b938054878d2149b25303896b4ab4",
+      "bytes": 1012,
+      "author": "Willy Tschager [Holly-Wood]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/48/4-4aring.dat": {
+      "sha256": "4c0d575f91df941b5d3313427d699813cc3cf9f09c334cbad7a0eceeaf98f573",
+      "bytes": 1354,
+      "author": "Philippe Hurbain [Philo]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/48/4-4con11.dat": {
+      "sha256": "f28f7aac7cff24de0375ca78f0b95c2fa13c0506cfa91c5ef75c4c1fb045b809",
+      "bytes": 7001,
+      "author": "Alex Taylor [anathema]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/48/4-4con16.dat": {
+      "sha256": "4bd00f0874807398676b85c04d207a307297fd42a896b745a44166f7d52e249e",
+      "bytes": 7302,
+      "author": "Willy Tschager [Holly-Wood]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/48/4-4con4.dat": {
+      "sha256": "a28e99bbe1f9d7f7a776d7fdcb2382fd7e5e8325b34429188e39473feb3473cf",
+      "bytes": 6741,
+      "author": "Willy Tschager [Holly-Wood]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/48/4-4con5.dat": {
+      "sha256": "86c49af64c12622bd3ebd7d741a23eb66394f277ecda99b4c164eb110fc5e8cc",
+      "bytes": 6709,
+      "author": "Willy Tschager [Holly-Wood]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/48/4-4con7.dat": {
+      "sha256": "23dbae863bf8813622ccda06549b131e81f8f5e29f70dec89a9f0afcbafbb457",
+      "bytes": 6909,
+      "author": "Willy Tschager [Holly-Wood]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/48/4-4con8.dat": {
+      "sha256": "ca58d0e2a1aaaec9033f745f638c557dbe6a721957b7ce4cfbae60a88d64368b",
+      "bytes": 6861,
+      "author": "Willy Tschager [Holly-Wood]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/48/4-4con9.dat": {
+      "sha256": "775a0491c31966cfa391e486d75c879c61c5408a9d26345ffa0841c425340c65",
+      "bytes": 6548,
+      "author": "Alex Taylor [anathema]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/48/4-4cyli.dat": {
+      "sha256": "6c466cd94f69ecdb3a5a83faee52ad2e5ecd9d1560975feaf854c3433de6e6a2",
+      "bytes": 683,
+      "author": "Paul Easter [pneaster]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/48/4-4cylo.dat": {
+      "sha256": "ce018b080f8d657ed514164b995e119e9ea104a03cd84e6a6f736b40f58252a6",
+      "bytes": 405,
+      "author": "Philippe Hurbain [Philo]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/48/4-4edge.dat": {
+      "sha256": "db8fd751c8c6b1f72211903adbff3aa90be6808cc4fcff391f1c320adced5da7",
+      "bytes": 712,
+      "author": "Paul Easter [pneaster]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/48/4-4ring10.dat": {
+      "sha256": "180b6a4e892347f36562b20f70e96d6d57737c9911651f3be7c7623998ce407b",
+      "bytes": 3575,
+      "author": "Willy Tschager [Holly-Wood]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/48/4-4ring12.dat": {
+      "sha256": "1039eb4b2b4fc4fcef26a199f71540c8629d4521720fbadb244f14c4ee06c2b5",
+      "bytes": 3984,
+      "author": "Mark Kennedy [mkennedy]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/48/4-4ring20.dat": {
+      "sha256": "ae814f4035141a2872da5bea0dbe29a5b58ff26b1f9ce4370dada66165135ca0",
+      "bytes": 3767,
+      "author": "Willy Tschager [Holly-Wood]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/48/4-4ring25.dat": {
+      "sha256": "bca42fe69296451c23d194316bb135ee6b88b4b15fcfe9122798f76885c4bb7b",
+      "bytes": 3815,
+      "author": "Willy Tschager [Holly-Wood]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/48/4-4ring26.dat": {
+      "sha256": "a5003ff346228c1e9545ac407bf7d2de8c29a7a9ecd0a59dd0f2612489c724c0",
+      "bytes": 3943,
+      "author": "Willy Tschager [Holly-Wood]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/48/4-4ring3.dat": {
+      "sha256": "b8b40d441cc3adcc6e30a6869b107f0456ead529510b43b3d8d37896f362e352",
+      "bytes": 3773,
+      "author": "Mark Kennedy [mkennedy]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/48/4-4ring4.dat": {
+      "sha256": "67c651ae1da2cf2d6952a69e62574fbfcfdec78e9dfab4b80147b8c6dd593e6a",
+      "bytes": 3630,
+      "author": "Mark Kennedy [mkennedy]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/48/4-4ring6.dat": {
+      "sha256": "58a64c659a70b3c371b5b8e8b3716fdf954139e97ce2fa09518b950e59559e34",
+      "bytes": 3654,
+      "author": "Willy Tschager [Holly-Wood]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/48/4-4ring8.dat": {
+      "sha256": "161616084a55a91c2e068afc2c51cc60fc08872e4ea4b55fa40f8e3155c24099",
+      "bytes": 3654,
+      "author": "Willy Tschager [Holly-Wood]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/48/4-4ring9.dat": {
+      "sha256": "d8de1753705319aa11a189b579323b778c9b6cf4869360e698c64a8a0cdbf3d2",
+      "bytes": 689,
+      "author": "Paul Easter [pneaster]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/48/5-24chrd.dat": {
+      "sha256": "1d95e3c2613cb23c7ee2731d8157ba2ac850641fe8ac890eb98f1d9da4a6f936",
+      "bytes": 666,
+      "author": "Alex Taylor [anathema]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/48/5-24edge.dat": {
+      "sha256": "98f6635f6593350b1a5987341291fc1cf17674c28ced8a421a69d1ec17b39575",
+      "bytes": 603,
+      "author": "Paul Easter [pneaster]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/48/5-48chrd.dat": {
+      "sha256": "2de0191722623a86aa2faecdb37db3b2350f527e8383019006241d2ad02d193e",
+      "bytes": 471,
+      "author": "Philippe Hurbain [Philo]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/48/5-48con6.dat": {
+      "sha256": "9d5f0b58846aa0636ea5f9bb50ef464277028304fc46d83fa5f8ac1e274c61ab",
+      "bytes": 1004,
+      "author": "Philippe Hurbain [Philo]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/48/5-48cyli.dat": {
+      "sha256": "4eecbd1aed619fce2460dfc862887a2bcf7e71111f16350b9d7d2ef8132ee19b",
+      "bytes": 960,
+      "author": "Alex Taylor [anathema]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/48/5-48cylo.dat": {
+      "sha256": "ce85306405bc98a63c0b8384334164af14cba502da6849726ee045a6d0c4d201",
+      "bytes": 417,
+      "author": "Max Martin Richter [MMR1988]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/48/5-48edge.dat": {
+      "sha256": "6310e55c91d0c6bba9b6d28372fe61069ac01b95614cfbbe6ddbb5649fc8cadb",
+      "bytes": 423,
+      "author": "Alex Taylor [anathema]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/5-16cyli.dat": {
+      "sha256": "3a46e175cd13f2343645b5ba1be54f1f2fdf446cf28392383d511d85eaa7665a",
+      "bytes": 946,
+      "author": "Philippe Hurbain [Philo]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/5-16edge.dat": {
+      "sha256": "17a9ae47e68e98286d27fc7be4a48e1110d1cae0d3abff658f3378a552857fc3",
+      "bytes": 437,
+      "author": "Philippe Hurbain [Philo]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/5-8cyli.dat": {
+      "sha256": "91679da1ed677f4273989f784e212d4a3f332cb4bee317617682b216f6aaf284",
+      "bytes": 1742,
+      "author": "Mark Kennedy [mkennedy]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/5-8cylo.dat": {
+      "sha256": "1b6b84c6316986d887e62da30a38d63d7e789dbf0e77e5ee53655dd78c218a12",
+      "bytes": 381,
+      "author": "J.C. Tchang [tchang]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/5-8edge.dat": {
+      "sha256": "ecac980b3e5486dda1363611cd2cbba5e3309b2fccc255363b6d9858f00ce583",
+      "bytes": 881,
+      "author": "Mark Kennedy [mkennedy]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/5-8ring2.dat": {
+      "sha256": "d5270bde58528f1c544f5d0df10ac4d98f002de21955fe36913bb98d80f026b9",
+      "bytes": 885,
+      "author": "Alex Taylor [anathema]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/7-16cyli.dat": {
+      "sha256": "e829752713ec727431bf5053bd3ad60a113236ad10a885aa87c0e5fd856598ae",
+      "bytes": 1385,
+      "author": "Magnus Forsberg [MagFors]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/7-16cylo.dat": {
+      "sha256": "347b7feca8d94f501ce40045c987575fd830ca0a5aae7cfdea49daf61e540bb9",
+      "bytes": 394,
+      "author": "Max Martin Richter [MMR1988]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/7-16edge.dat": {
+      "sha256": "c98b01990a94c2c5a786f06cdfbc199a2bb4685e2d605b7ed2c6efb98e710842",
+      "bytes": 568,
+      "author": "Orion Pobursky [OrionP]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/8-8sphe.dat": {
+      "sha256": "27a7d82cce6d579b6a83ddcccee1c38ec1e37781831dae65b2cdf704d84d64b1",
+      "bytes": 881,
+      "author": "James Jessiman",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/8/1-4cyli.dat": {
+      "sha256": "a9e8266ebf4bdb75f8ac643596e29e3069cc88697a379e4b116fa59b1c138bbf",
+      "bytes": 550,
+      "author": "Philippe Hurbain [Philo]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/8/1-4cylo.dat": {
+      "sha256": "d0b0c3568d1ec7160378aec8e90a9ac101c6bd4398ea9d70c15feeb6f2574211",
+      "bytes": 402,
+      "author": "Magnus Forsberg [MagFors]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/8/1-4cyls.dat": {
+      "sha256": "c4cb59937f09c2c106bafd2c971302d8319247180e1dd0e9a010e1b34cfc4ada",
+      "bytes": 469,
+      "author": "Philippe Hurbain [Philo]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/8/1-4edge.dat": {
+      "sha256": "841b1c8c1e48553b010ba25fde8e9ef1ea959c1ac83c7c7b6dae7277fbee4a35",
+      "bytes": 348,
+      "author": "Philippe Hurbain [Philo]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/8/1-4ndis.dat": {
+      "sha256": "c47a4b0165bfffb084112a6703f4dc1641fdea7c3c68337a4b745223cf400ce2",
+      "bytes": 375,
+      "author": "Magnus Forsberg [MagFors]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/8/2-4chrd.dat": {
+      "sha256": "2caebc5de687f190e7ef2f25724665284bf0139e4db42844d0e2691128b9c0ea",
+      "bytes": 343,
+      "author": "Magnus Forsberg [MagFors]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/8/2-4cyli.dat": {
+      "sha256": "9e5869a3bf444fcda1cc9908ef96ce782b53fc68f94eaf6903a0dbca6c582215",
+      "bytes": 763,
+      "author": "Philippe Hurbain [Philo]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/8/2-4cylo.dat": {
+      "sha256": "cf7a9969c8d7396d17966b65c8ea48ea36445e98580dc76d18e5aa1fc5afd54f",
+      "bytes": 394,
+      "author": "Magnus Forsberg [MagFors]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/8/2-4edge.dat": {
+      "sha256": "3154ed3f142d644552b2533457c13c56ef326b0f7d31ea425585d6cdde2a3129",
+      "bytes": 406,
+      "author": "Philippe Hurbain [Philo]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/8/2-4ndis.dat": {
+      "sha256": "4f646d4ca8dd67205faf9b0e233c4921b85d3b30a9283090b0482397aad1a487",
+      "bytes": 447,
+      "author": "Magnus Forsberg [MagFors]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/8/3-8chrd.dat": {
+      "sha256": "38da11ee98a5af1aa8519ef2695f07f9182b1e3d555d02724c0f0f3eaf5d2631",
+      "bytes": 351,
+      "author": "Philippe Hurbain [Philo]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/8/3-8cyli.dat": {
+      "sha256": "a48d8a1256f826b5e4e3644aa83f8233d1d295ec90509283a798fd24f86eba4c",
+      "bytes": 683,
+      "author": "Philippe Hurbain [Philo]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/8/3-8cylo.dat": {
+      "sha256": "357980a30dd89cdd6f6e0d46e78a1984a900cd22a0d7b1b75662fdd40b53c880",
+      "bytes": 402,
+      "author": "Philippe Hurbain [Philo]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/8/3-8edge.dat": {
+      "sha256": "f28310dd1755cabdd2451f190f85ed2cbd0f3419d11f560bcbfd5971b27529e5",
+      "bytes": 390,
+      "author": "Philippe Hurbain [Philo]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/9-16edge.dat": {
+      "sha256": "5d9e98308232980f596c14e0a6e1d9d4e97fc472a6ada152ae5f4ee6eb504868",
+      "bytes": 531,
+      "author": "Orion Pobursky [OrionP]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/axl2ho10.dat": {
+      "sha256": "5890f737d6d8507967dbbd552d8a5122f669b47cde1fd712f3f9bef098419361",
+      "bytes": 1013,
+      "author": "Michael Heidemann [mikeheide]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/axl2hol2.dat": {
+      "sha256": "588bf34d84213c071fcd6fd31dbd2a19db8797cfefeabdaf566b56a467260c57",
+      "bytes": 894,
+      "author": "Willy Tschager [Holly-Wood]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/axl2hol8.dat": {
+      "sha256": "aec8db1ea95afe49ff1e3a6ac36a7df8735fe03300d58aa0b9da28bec25be5ea",
+      "bytes": 3386,
+      "author": "Michael Heidemann [mikeheide]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/axl2hol9.dat": {
+      "sha256": "5864b8cde1b8987a041e762f9186ca45b1e3687e34c3a201cf8b70092256c89c",
+      "bytes": 881,
+      "author": "Michael Heidemann [mikeheide]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/axl2hole.dat": {
+      "sha256": "011b953c5e20d085977d71a8aa3dffc480e53d4df8cca5800b5b275df2d6a4b1",
+      "bytes": 1243,
+      "author": "Steve Bliss [sbliss]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/axl3ho10.dat": {
+      "sha256": "7799ee39b85781d7283d952136cba415605b819a87b9ec92cbfe3f348c8c1f5e",
+      "bytes": 743,
+      "author": "Santeri Piippo [arezey]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/axl3hol2.dat": {
+      "sha256": "5d35ee8c2a5ecf50222d9e7a5a489730f4296b47e781157a7f01263b162c6901",
+      "bytes": 656,
+      "author": "Santeri Piippo [arezey]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/axl3hol3.dat": {
+      "sha256": "05fd46a65cb2342d3e88e3789a610b4f17f9fc8fd614f90bf8c2b3f44e13a171",
+      "bytes": 743,
+      "author": "Santeri Piippo [arezey]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/axl3hol8.dat": {
+      "sha256": "2349b82c7dd4559a45913986e07e185035fdb48928ac13e5fd774f4c30a65e96",
+      "bytes": 2605,
+      "author": "Santeri Piippo [arezey]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/axl3hol9.dat": {
+      "sha256": "a99c7a963b46b735e36743f216efdd4916f982b4b984469de5b7e6bddb18e8c7",
+      "bytes": 617,
+      "author": "Santeri Piippo [arezey]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/axl3hole.dat": {
+      "sha256": "eb2369c61af0f2e3c2bf85f0f23ca92d5d313719941f0f8ff4eabde4b131ba7e",
+      "bytes": 4789,
+      "author": "J.C. Tchang [tchang]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/axl4hol2.dat": {
+      "sha256": "7ee5a23e8695b9dbea4741c2fc8aa8aee6469693e01df16bbbc8d15dc231e2b9",
+      "bytes": 468,
+      "author": "Santeri Piippo [arezey]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/axl4hol3.dat": {
+      "sha256": "3848916ea79824dde337f31a9271b652953bceb4162fe72a5ebe16ecf679988a",
+      "bytes": 543,
+      "author": "Santeri Piippo [arezey]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/axl4hole.dat": {
+      "sha256": "cf5ad42817985c6a5f97b7c1a20a33ab83c73fb76edaf282dc8360d82c8400a1",
+      "bytes": 831,
+      "author": "Santeri Piippo [arezey]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/axl5ho10.dat": {
+      "sha256": "5658b3df4183184a5d5104624ff85b3048a658972991b1dfc489dc05728278ba",
+      "bytes": 1173,
+      "author": "Magnus Forsberg [MagFors]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/axl5hol8.dat": {
+      "sha256": "95b2d384c0697cd5dd4ebcc9fd4ab2d005307af5aa611bea20ce832a91f8bc68",
+      "bytes": 2237,
+      "author": "Magnus Forsberg [MagFors]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/axl5hol9.dat": {
+      "sha256": "d46a457be819e6b46b7fc85f8610b8850e0d0a40556c65b74dbda04179b68a20",
+      "bytes": 677,
+      "author": "Magnus Forsberg [MagFors]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/axleend2.dat": {
+      "sha256": "cedcec0918b69285f612c94d1f6532f7352a08f18b2749dde6f6a5235c1a0c73",
+      "bytes": 8085,
+      "author": "Magnus Forsberg [MagFors]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/axleend20.dat": {
+      "sha256": "ab1e77729fa281549ece68f4ba918b7a673ab4b4678df930969ef1cd016f86c8",
+      "bytes": 550,
+      "author": "Magnus Forsberg [MagFors]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/axleho10.dat": {
+      "sha256": "57347651b39b4b4bd3059167a38c84876ee32a0abaae31e6936ae4aaf9a2eccd",
+      "bytes": 1705,
+      "author": "Steve Bliss [sbliss]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/axleho12.dat": {
+      "sha256": "f6f21441d872a114c06992b59d3f95974265220041db16ed418ce75643e46106",
+      "bytes": 2208,
+      "author": "Rene Rechthaler [Blechtaler]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/axlehol2.dat": {
+      "sha256": "9d3e161068b049c3a21fbb8c0970d8264215c08bfcefd3508b8bbff47974a319",
+      "bytes": 762,
+      "author": "James Jessiman",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/axlehol3.dat": {
+      "sha256": "81caa1e48cb356fd74575f2a37a4422d75cafb930fae19182783f48381e48d2f",
+      "bytes": 1117,
+      "author": "James Jessiman",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/axlehol4.dat": {
+      "sha256": "256ebbe25364125c893ffd4dbbe5131e46aae4b961611848b3bfde88f855673c",
+      "bytes": 3224,
+      "author": "James Jessiman",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/axlehol5.dat": {
+      "sha256": "5977860888c76d8170d9ec33c93f6c431133bfdc79435e7eac9c32bb15c0a83d",
+      "bytes": 3125,
+      "author": "James Jessiman",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/axlehol6.dat": {
+      "sha256": "e7d0115c0eaab5acfb54d9b4d034bbf938d8d44d3be830aae73b091e1d1ce774",
+      "bytes": 1776,
+      "author": "Steve Bliss [sbliss]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/axlehol8.dat": {
+      "sha256": "e3cf8856c972ecaf486a344c171cb4ab601efcb08956bd7b6cfafa39b0439493",
+      "bytes": 1706,
+      "author": "Steve Bliss [sbliss]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/axlehol9.dat": {
+      "sha256": "ac0d0c6e94427fc30f64e90f1efcbf6b46b36762510245dda7450b0c3ca8ebd1",
+      "bytes": 960,
+      "author": "Steve Bliss [sbliss]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/axlehole.dat": {
+      "sha256": "8dfcdd5058a66fba2ea4f59ddc7fd4510118baca9f745e5dfe341ccf0e24b49e",
+      "bytes": 1974,
+      "author": "James Jessiman",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/beamhol2.dat": {
+      "sha256": "88f148f110e041d425d975512bed33b17992998ea99e459a5276243d382075dd",
+      "bytes": 965,
+      "author": "Willy Tschager [Holly-Wood]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/beamhole.dat": {
+      "sha256": "8622d704b75a6f81cdccf99e44f8e88a6b1df024d90e160ff18afb07c482f77b",
+      "bytes": 927,
+      "author": "Willy Tschager [Holly-Wood]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/box2-11.dat": {
+      "sha256": "7f29fb8601b419207b5c855af8fad8abb55a967ec73f3d8be841d370c360b97c",
+      "bytes": 489,
+      "author": "Steffen [Steffen]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/box2-5.dat": {
+      "sha256": "8f297b754f87da1dbe19eec8704a5ce03a23b794ccd7cd015508e3758a206174",
+      "bytes": 609,
+      "author": "Steffen [Steffen]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/box2-7.dat": {
+      "sha256": "e0474c5ad7fb9ff77b67883a5b1e327d028e3eb4e59921a626b4215632dd9f00",
+      "bytes": 577,
+      "author": "Willy Tschager [Holly-Wood]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/box2-9p.dat": {
+      "sha256": "6c68301a34e42d105e716e5ae5edf02e3d58978db24619f0364887c339edd331",
+      "bytes": 539,
+      "author": "Willy Tschager [Holly-Wood]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/box3u2p.dat": {
+      "sha256": "df73118b95f23d693c3b7d25c57c483db3bf61ae017d757848119955d28d59e0",
+      "bytes": 818,
+      "author": "Niels Karsdorp [nielsk]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/box3u4a.dat": {
+      "sha256": "15463f41f9947dd75486dc7af3231b1037704f1b654c2555e3ba705817a2db75",
+      "bytes": 545,
+      "author": "Niels Karsdorp [nielsk]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/box3u5p.dat": {
+      "sha256": "0f52d5c372a303f508113ace2c7cba6d52b46171052e76a88266679a74f17ea5",
+      "bytes": 658,
+      "author": "Willy Tschager [Holly-Wood]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/box3u8p.dat": {
+      "sha256": "0f6187106f023d041dcfd2a24e9f5a2a0c37b5c41b0ff171267ae776a8f16760",
+      "bytes": 737,
+      "author": "James Jessiman",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/box4-4a.dat": {
+      "sha256": "58c69e00462c0a74c1bd6d75d757d826ae13e98bd3928b0e685209003bfbee54",
+      "bytes": 1067,
+      "author": "Willy Tschager [Holly-Wood]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/box4o8a.dat": {
+      "sha256": "2144edea417bbc55c261e3731ea86d52ac50c7cb651b4879f55ec39966fd0f5b",
+      "bytes": 749,
+      "author": "Steffen [Steffen]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/box5-4a.dat": {
+      "sha256": "70d5f7f2d0720b84a06100b12b449b8ad37d66a02fc4650b31d556d7b1d0fe41",
+      "bytes": 752,
+      "author": "Willy Tschager [Holly-Wood]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/box5.dat": {
+      "sha256": "ccb7b8a1d36692335b10ea6aa196849afcad4b15331683ed8112a10b50977318",
+      "bytes": 963,
+      "author": "James Jessiman",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/bush0.dat": {
+      "sha256": "e624dab4cba4934f674647672537c284597a2467bac06ae3e9dbab8e3857782b",
+      "bytes": 800,
+      "author": "Willy Tschager [Holly-Wood]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/bush0a.dat": {
+      "sha256": "30213424b26a50531b8656dd973beaf6fa6f7ab4cc4419522d710851c2edbf02",
+      "bytes": 4603,
+      "author": "Gerald Lasser [GeraldLasser]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/confric10.dat": {
+      "sha256": "096265a10a4723a081b0724055bb5a04a603bb07b22920f88f460ff7003b4e44",
+      "bytes": 1320,
+      "author": "Philippe Hurbain [Philo]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/confric3.dat": {
+      "sha256": "a94c90c0506925a3f018449053ab790a98ecdbdba6d793aafe26d6a75e0ee8d1",
+      "bytes": 2113,
+      "author": "Philippe Hurbain [Philo]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/confric4.dat": {
+      "sha256": "038addd6f853b704739ee4c9d9432a9557b02e2e6ab8ba874abb35bd9c90a56a",
+      "bytes": 907,
+      "author": "Owen Burgoyne [C3POwen]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/confric5.dat": {
+      "sha256": "171ab5f7673337292eaf1477798e7fea5163cf409c379dce04f22c755380dafd",
+      "bytes": 16967,
+      "author": "Donald Sutter [technog]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/confric6.dat": {
+      "sha256": "ec2ac19e84bb3ed75318b3b55438ad5d3d6d2347bdeb0e3ff4f626282bf58c3f",
+      "bytes": 18689,
+      "author": "Donald Sutter [technog]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/confric8.dat": {
+      "sha256": "0ec45444958bf90c29477cc62e646ddc521a2eb98fc4783df86c93c9e7520d1c",
+      "bytes": 17049,
+      "author": "Donald Sutter [technog]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/confric9.dat": {
+      "sha256": "11d2edb32d396150695400ec9bcc7af65acd76740eea5ed4924ea3880ce09902",
+      "bytes": 15861,
+      "author": "Donald Sutter [technog]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/confricrib1.dat": {
+      "sha256": "3d4f3394b9aaa9007498a35a33e2c63113c6b6113027c205531bc91bb6335067",
+      "bytes": 1795,
+      "author": "Philippe Hurbain [Philo]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/confricrib2.dat": {
+      "sha256": "029431b8493179b67ac662e609f61cac5b75bda8974360886214c1d6fbce9603",
+      "bytes": 4462,
+      "author": "Philippe Hurbain [Philo]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/confricrib3.dat": {
+      "sha256": "4c1187b3607031a39b1ced6415c90b7ac0bdc11e622312ecb4206f2cec05f64e",
+      "bytes": 2664,
+      "author": "Philippe Hurbain [Philo]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/confricrib4.dat": {
+      "sha256": "8377c04d9e319692ea66b73be18ac5d01e6ac6683c4e99c3ed6b1f19b2f22d57",
+      "bytes": 3653,
+      "author": "Philippe Hurbain [Philo]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/connect.dat": {
+      "sha256": "fa572d5b7bcdb19ea2ba74cd1a98aca913e1e556001232e484611915adf83305",
+      "bytes": 7441,
+      "author": "James Jessiman",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/connect7.dat": {
+      "sha256": "ce2d2d478bca4230d69a155302280108d05f1cd24735a4b2836f303908d607ea",
+      "bytes": 8123,
+      "author": "Philippe Hurbain [Philo]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/connect8.dat": {
+      "sha256": "0bc309d24dbf2b1bda1a0dde6a065d230e81c7d1f012c622ac0fafecf7f98529",
+      "bytes": 6202,
+      "author": "Owen Burgoyne [C3POwen]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/connectcollar1.dat": {
+      "sha256": "5e090fe4eeee1c4abe12d2dd27bf4b1961c6d2be2e87d8cd1ed64063e269db0e",
+      "bytes": 3642,
+      "author": "Philippe Hurbain [Philo]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/connectcollar4.dat": {
+      "sha256": "1e0b2f3bc1872c405e6ed0bc7b6fee8416a4756f7d6ff78b4a028acbeff69722",
+      "bytes": 3432,
+      "author": "Philippe Hurbain [Philo]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/connectslit2.dat": {
+      "sha256": "f57c2e74ed9a190f1abbff9a7dc073034d2e2dc654d3c9a13587cd8a859b9697",
+      "bytes": 1018,
+      "author": "Philippe Hurbain [Philo]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/connhol2.dat": {
+      "sha256": "3748d67fa7aef4d3d5f6c5d78adb2f9c6b93ed403159455f7e5f702d6ad390ec",
+      "bytes": 820,
+      "author": "Santeri Piippo [arezey]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/connhol3.dat": {
+      "sha256": "8601ce04ac639c448ede7910756e033f55fef3cbb19319e7efe1d8512957a8f8",
+      "bytes": 595,
+      "author": "Magnus Forsberg [MagFors]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/connhole.dat": {
+      "sha256": "577a734213f632d44646c02d5f9b0f7581df1572aff2f213791bc6172d623af4",
+      "bytes": 693,
+      "author": "Magnus Forsberg [MagFors]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/empty.dat": {
+      "sha256": "192c9b9ee2e425cfbc9e9b12ff61ee0f05ae1cb0c12dc37d5590adb6abb65128",
+      "bytes": 825,
+      "author": "Steffen [Steffen]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/filstud3.dat": {
+      "sha256": "10baa74dd972e904e539b37aaff1ac0c9cd41cc36bf9d4963605c761465ef50d",
+      "bytes": 2351,
+      "author": "Magnus Forsberg [MagFors]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/fric.dat": {
+      "sha256": "7d8e50de2144286e6028ea5c97d03b9c5ef50f8c3353527fc2f5d8d36ba4b85b",
+      "bytes": 795,
+      "author": "Owen Burgoyne [C3POwen]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/npeghol10.dat": {
+      "sha256": "c0afbce636428be0d8a33c1f7cd50f9ccb68af2ae506b2bd7a7a9130d6076043",
+      "bytes": 3389,
+      "author": "Philippe Hurbain [Philo]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/npeghol18.dat": {
+      "sha256": "d371fae6189d2d76b7e995dd42c935aaaf9f81c6095ea8f19f0163c2a9fb42f1",
+      "bytes": 1698,
+      "author": "Massimo Maso [Sirio]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/npeghol19.dat": {
+      "sha256": "29879c27995254faf9abb29a802edf44de07c806e681ae3740ecc04635103dbd",
+      "bytes": 3188,
+      "author": "Max Murtazin [SwampKryakwa]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/npeghol2.dat": {
+      "sha256": "7bbaec49211f6f511bf04c9c53af78c1478d10f22797e9d26da5e2ba719d5d64",
+      "bytes": 991,
+      "author": "Orion Pobursky [OrionP]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/npeghol20.dat": {
+      "sha256": "0d66dc7424f9bf6d07183dfb6860b7196c648c2336d6dcd74381e5f605591c65",
+      "bytes": 513,
+      "author": "Max Murtazin [SwampKryakwa]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/npeghol21.dat": {
+      "sha256": "f59422b2616900345e0cc304faa6d37bdf27c4bad37863df391d645827329567",
+      "bytes": 3325,
+      "author": "Ralf Kochanowski [rkoch]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/npeghol3.dat": {
+      "sha256": "4f580204560a77a088cf345168854a0492ea2448fed88d2b63b096bb2cfabc6a",
+      "bytes": 1212,
+      "author": "Max Murtazin [SwampKryakwa]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/npeghol3a.dat": {
+      "sha256": "f00979f44ded211b0e9df3a9f5f88dadd505676ad2ec98c7f9ecccabd0b063f0",
+      "bytes": 5846,
+      "author": "Max Murtazin [SwampKryakwa]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/npeghol4.dat": {
+      "sha256": "ac8a4de8537ea34e4c564cf354c4a8bc9120cc3f4504661038e3f7318812679d",
+      "bytes": 1138,
+      "author": "Max Murtazin [SwampKryakwa]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/npeghol4a.dat": {
+      "sha256": "1217309bd824bba07477b53f3e4120aaddf2d8690f0188e8ed2ab6106f6cff56",
+      "bytes": 1345,
+      "author": "Max Murtazin [SwampKryakwa]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/npeghol6c.dat": {
+      "sha256": "57ed8ae1d42582fae7179b0774d2feea4f468137f93d9be3b0b063b270f02675",
+      "bytes": 1660,
+      "author": "Magnus Forsberg [MagFors]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/npeghol6d.dat": {
+      "sha256": "d7515cd9795b78c7b5db3d071039bd336ddcbe352e040a8a0c4f0305c06ef009",
+      "bytes": 1700,
+      "author": "Max Murtazin [SwampKryakwa]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/npeghol7.dat": {
+      "sha256": "7892ac0ecc0086f00a15a939292717e5a8f0b9685963de6f95378a6bfa26dd53",
+      "bytes": 2621,
+      "author": "Max Murtazin [SwampKryakwa]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/npeghol7a.dat": {
+      "sha256": "9e0c2321dee34bb45e80deb19db2d46376e398353e57abbc89f3161af0065967",
+      "bytes": 988,
+      "author": "Max Murtazin [SwampKryakwa]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/npeghol8.dat": {
+      "sha256": "4fbb5add7705e3b5b485f27c2cc35c13c17ee8b1def98b952df314b0659ba7cb",
+      "bytes": 3667,
+      "author": "Philippe Hurbain [Philo]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/npeghol9.dat": {
+      "sha256": "218a7aace2e1d2b4d3b22f1c072a694fadb8801eb5591eb6bca4197808b466b0",
+      "bytes": 1364,
+      "author": "Philippe Hurbain [Philo]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/npeghole.dat": {
+      "sha256": "cd0fb8b9943601de2666af54c6fcc9d9903422ee0ab4e4474c8d6c94bfd9287c",
+      "bytes": 737,
+      "author": "Max Murtazin [SwampKryakwa]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/peghole.dat": {
+      "sha256": "90c6dba9e5bcdd63955b9a5208f377761850863be9ed26cac7cd2be61ab85c92",
+      "bytes": 814,
+      "author": "James Jessiman",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/peghole5.dat": {
+      "sha256": "bf60f74a91fe9741a1e51c5729dfbe5c2972231a5782557f9184b11f412e3aa5",
+      "bytes": 841,
+      "author": "Willy Tschager [Holly-Wood]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/rect.dat": {
+      "sha256": "ffeb2dd3d9b83c38841f18f1f74800fbba9e90c5fb6badfff2a795f08a96cb71",
+      "bytes": 654,
+      "author": "James Jessiman",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/rect1.dat": {
+      "sha256": "48fdcd3181587b4bdc89d356a5aee21268688f3f2fcdd4d6f5c1a3d49b1a1ceb",
+      "bytes": 556,
+      "author": "Chris Dee [cwdee]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/rect2a.dat": {
+      "sha256": "6d75ffb88e705a35f34e095ec0848a7bb70b577a376fdae05804da214b0d6369",
+      "bytes": 586,
+      "author": "Chris Dee [cwdee]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/rect2p.dat": {
+      "sha256": "faac2b36241a9de0c0108471e59c45734df6c79813332d9cacf97f6391886acc",
+      "bytes": 594,
+      "author": "Donald Sutter [technog]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/rect3.dat": {
+      "sha256": "07ac46908b6668d993b6de0fb001a34cd996542106b80ebc7de63317d8dde865",
+      "bytes": 605,
+      "author": "Mark Kennedy [mkennedy]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/stud2a.dat": {
+      "sha256": "61fbed54b085a30490045309778d1e2a6d95485e6558996b12674f848028d557",
+      "bytes": 866,
+      "author": "James Jessiman",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/stud4.dat": {
+      "sha256": "871cdcab26e7f5113488a24c453d6fabda75b275b06de592e0bfaad4292c12a3",
+      "bytes": 935,
+      "author": "James Jessiman",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/t04i2500.dat": {
+      "sha256": "16a0e74be0e6e149ea99ffd6aff98b3406c19fc7727d0453b1fe1572cf4e40bb",
+      "bytes": 5104,
+      "author": "Paul Easter [pneaster]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/t04o6250.dat": {
+      "sha256": "c09d0c876e3b54907f2640576924316922d686fec53bb64cf7379efa0d8e9485",
+      "bytes": 5226,
+      "author": "Paul Easter [pneaster]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/tooth16.dat": {
+      "sha256": "cc241d16b0ecc6274032b41adbfafd71ee21d6db5ddf4e9387bbbcda5a6fc473",
+      "bytes": 1598,
+      "author": "Willy Tschager [Holly-Wood]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/toothb12.dat": {
+      "sha256": "3c29caca285bdf385009bab2b7e3726d22eb711f6b2fd0fcd5a22129b16f0de4",
+      "bytes": 2844,
+      "author": "Mark Kennedy [mkennedy]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/toothr.dat": {
+      "sha256": "d9a968cda4736bc47287cf45d340de7f39939213d8c94c92a06505ed79df7efa",
+      "bytes": 838,
+      "author": "Mark Kennedy [mkennedy]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/p/tri3u1.dat": {
+      "sha256": "fefd16b0813a80cbce7361752cf6ce3a71f08c8a8700ced562047abf40829efc",
+      "bytes": 505,
+      "author": "Mark Kennedy [mkennedy]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/11214.dat": {
+      "sha256": "556deb5046ba561714446377068dbff68eb7db2c313a8a53d8b4bf233db7b959",
+      "bytes": 563,
+      "author": "Philippe Hurbain [Philo]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/11455.dat": {
+      "sha256": "767c1c22a5cb0697c82ccfb659038f5b8b89859c304cd7d23e44d4b084c2a42b",
+      "bytes": 8516,
+      "author": "Magnus Forsberg [MagFors]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/11478.dat": {
+      "sha256": "61b24c21ff9f94a34efe16c178efc2c28b2d16b3d83c3e40c8010f1b987bd61e",
+      "bytes": 1189,
+      "author": "Max Martin Richter [MMR1988]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/11946.dat": {
+      "sha256": "ca938f00dd3a0eeaea803954075c3799fbff65ecdd2e809ae53ae04afee83f30",
+      "bytes": 319,
+      "author": "Philippe Hurbain [Philo]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/11947.dat": {
+      "sha256": "10ed95ebfd9a11d9658cb450da10d4e346503b226eeb52c1b158579ecd5e6383",
+      "bytes": 8170,
+      "author": "Philippe Hurbain [Philo]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/11950.dat": {
+      "sha256": "604342c6d0cc1051419959844ae779e8479b9c2a56b566a73ae2e8b7d19e7d8d",
+      "bytes": 13857,
+      "author": "Philippe Hurbain [Philo]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/14720.dat": {
+      "sha256": "690727fa7971baa5bb62d404916c5db465ffc6d6085940c4090913aaf3dee960",
+      "bytes": 4918,
+      "author": "Philippe Hurbain [Philo]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/15100.dat": {
+      "sha256": "009edf5a2d86ee3d87345a27b646500efd66b6bb63437fbcb3ddce22218d4ebb",
+      "bytes": 740,
+      "author": "Philippe Hurbain [Philo]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/15462.dat": {
+      "sha256": "9c3f45c66ed94b70b7a308a24c22e3d79ce0da0d8d3451a05dbc01485c853edd",
+      "bytes": 678,
+      "author": "Max Martin Richter [MMR1988]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/18651.dat": {
+      "sha256": "5f9479e8458667cad41fc87c8d5d0bbc4a548bc8e10e3b736c5cf0476dfa58d4",
+      "bytes": 702,
+      "author": "Owen Burgoyne [C3POwen]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/18654.dat": {
+      "sha256": "80a0c04eb2ac78eed9f0fa740cb332ce8d08f2c89c9839cbd9492e8b54d4474a",
+      "bytes": 335,
+      "author": "Owen Burgoyne [C3POwen]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/18945.dat": {
+      "sha256": "3e01a20cf2a89ba5f5702452a893344a47a9c5c3e7c96510837592e5f5838ce5",
+      "bytes": 23993,
+      "author": "Philippe Hurbain [Philo]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/2387.dat": {
+      "sha256": "27c76e9fa3c5a5ce60280a3f83315768474444a5e0d65c240a79218ebad79b8a",
+      "bytes": 943,
+      "author": "Philippe Hurbain [Philo]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/2389.dat": {
+      "sha256": "453c490d0f9161f502cb229d97312f5545828a53653f08d5319c1dae044106ff",
+      "bytes": 320,
+      "author": "Philippe Hurbain [Philo]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/2391.dat": {
+      "sha256": "b191a1924bd375da3a4addd32f6761b903a87a138e8153b0fd191fd3f9e5b3a1",
+      "bytes": 527,
+      "author": "Philippe Hurbain [Philo]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/2393.dat": {
+      "sha256": "d9ce5861b0fd63ab726955caf04bc82230df869443e5fb69307404ae34f45b7c",
+      "bytes": 2120,
+      "author": "Philippe Hurbain [Philo]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/23948.dat": {
+      "sha256": "7c8833a4a283f1eeab15ccb16c1f03f33f98bfc5578240a66aac3850329dee28",
+      "bytes": 491,
+      "author": "Rolf Osterthun [Rolf]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/24116.dat": {
+      "sha256": "78e67399c4b0a4c5758c6084cc7dbbae7dacdcaa127c2259c1176084b0072d7f",
+      "bytes": 16731,
+      "author": "Philippe Hurbain [Philo]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/26287.dat": {
+      "sha256": "1d4f38c12aedcf552e9b6b5490a083b53172e5bd4bcd8bd6f74bfb5fb6bd857b",
+      "bytes": 3922,
+      "author": "Philippe Hurbain [Philo]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/2780.dat": {
+      "sha256": "2628d30bcfa42b3a616da38b8020cbc2b1edb98b055329cfac56425cdc9a8277",
+      "bytes": 451,
+      "author": "Guy Vivan [guyvivan]",
+      "license": "Licensed under CC BY 2.0 and CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/30374.dat": {
+      "sha256": "db69ea3eecc2a6f2731aaad6ac8fb072c5ecbe136d1ea8a03de593014fe2e9c0",
+      "bytes": 961,
+      "author": "Steve Bliss [sbliss]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/3167.dat": {
+      "sha256": "8e819b07753ac07d3c8266fc6dc9c3f7766c9827b1f18f0f8f52bf31135f5f9d",
+      "bytes": 896,
+      "author": "Philippe Hurbain [Philo]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/32009.dat": {
+      "sha256": "aacf33974d07de7cddf19a803972f12c224e1a2a6fd10b59ed1213288ff65f4c",
+      "bytes": 8402,
+      "author": "Steve Bliss [sbliss]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/32017.dat": {
+      "sha256": "f30db066200d74e77371e03c98f67b149b24f315f89d04960112e4266862876f",
+      "bytes": 1382,
+      "author": "Lutz Uhlmann [El-Lutzo]",
+      "license": "Licensed under CC BY 2.0 and CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/32054.dat": {
+      "sha256": "cea14c4d68550bd24f59318dfea219edba853a1fa2a3c8ebb98848a6d95b3ac1",
+      "bytes": 1826,
+      "author": "Guy Vivan [guyvivan]",
+      "license": "Licensed under CC BY 2.0 and CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/32062.dat": {
+      "sha256": "5d5a970dccccabbd0a0e89e9519c69a51e6a8c75a35af1cfbf61f4fb46231da7",
+      "bytes": 6616,
+      "author": "Steve Bliss [sbliss]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/32065.dat": {
+      "sha256": "0ee828ed2854fb8c4956d0fb330005e3dcf5644916ce43a4b8bd991137fc4e8d",
+      "bytes": 3138,
+      "author": "Steve Bliss [sbliss]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/32073.dat": {
+      "sha256": "2d4c66bf2cbfcb3aca89ddb2fd8ecc50631093f6e3d693ffd6d9ccbd63beadbf",
+      "bytes": 568,
+      "author": "Magnus Forsberg [MagFors]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/32123a.dat": {
+      "sha256": "a7e874500e3dcda9f4041acc9f620bffded7ade9745d8fa2f45695fbb063e1c7",
+      "bytes": 1805,
+      "author": "Steve Bliss [sbliss]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/32140.dat": {
+      "sha256": "5c9def4c5be03a5be161a060cd0a106cbb9bffef7117973181123c33f6200f4d",
+      "bytes": 2478,
+      "author": "Guy Vivan [guyvivan]",
+      "license": "Licensed under CC BY 2.0 and CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/32184.dat": {
+      "sha256": "b8b99136eec5188641ad689bed183ad787f5b3325329f7e22c61cf8271f947a4",
+      "bytes": 6227,
+      "author": "Jeff Boen [onyx]",
+      "license": "Licensed under CC BY 2.0 and CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/32270.dat": {
+      "sha256": "61e8f2844749dcbe2d0f7be8e1c04b43c3a8e48bdc13d1a1e40d52cba8c1ca84",
+      "bytes": 3625,
+      "author": "Marc Klein [marckl]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/32271.dat": {
+      "sha256": "868df3f41a90a21e22996e71646fe33e02dc739d7d3cf9bf6f9bb3f1c8d31664",
+      "bytes": 3831,
+      "author": "Ishino Keiichiro",
+      "license": "Licensed under CC BY 2.0 and CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/32278.dat": {
+      "sha256": "c655b689837e76d5bd9dcce36c5b1732384fc76993ad68c8fe7221218397843d",
+      "bytes": 2251,
+      "author": "Ishino Keiichiro",
+      "license": "Licensed under CC BY 2.0 and CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/32316.dat": {
+      "sha256": "321a837bbef296bdff22a2619dc2832eb8f241e9444c753e3a32b466706f42e1",
+      "bytes": 504,
+      "author": "Philippe Hurbain [Philo]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/32348.dat": {
+      "sha256": "e3bfd1bb85696b7079974511b3b7ad1c686cd90e6dc7abec9281b5e1c7abb981",
+      "bytes": 3597,
+      "author": "Ishino Keiichiro",
+      "license": "Licensed under CC BY 2.0 and CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/32523.dat": {
+      "sha256": "37d90eaee5ba21c0c20b25af1b299ae9a17ff945fdbcd3c3fe1d02039c22f3f7",
+      "bytes": 432,
+      "author": "Tim Gould [timgould]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/32524.dat": {
+      "sha256": "2c2c55243d404a65b013ea96aeaffc398cb65ae4a0be1fc7246c8a44e0f22947",
+      "bytes": 1268,
+      "author": "Philippe Hurbain [Philo]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/32526.dat": {
+      "sha256": "46d0ec20762972e43e30e06cb724159f59906baac70aea4adbaab46dc0ba692d",
+      "bytes": 873,
+      "author": "Jonathan P. Brown",
+      "license": "Licensed under CC BY 2.0 and CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/33299b.dat": {
+      "sha256": "ce38ab05a770eb9c51abae6e1b27a925641361e6601b8ce60c26f23a80db8246",
+      "bytes": 1443,
+      "author": "Santeri Piippo [arezey]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/3626b.dat": {
+      "sha256": "6b9da823327978aef7c639ca16e5305e78e165536ac9de6bdece6daae60856e2",
+      "bytes": 1517,
+      "author": "Tore Eriksson [Tore_Eriksson]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/3706.dat": {
+      "sha256": "a45710ed426e853ec856c7a13339ff0e1821d67ffc792b2d931ff57dafb01443",
+      "bytes": 654,
+      "author": "James Jessiman",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/39793.dat": {
+      "sha256": "5d839a16ebaa6101ca955e86701cc6536eef95b48316d93f13532b6a5e102c52",
+      "bytes": 1131,
+      "author": "Philippe Hurbain [Philo]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/40490.dat": {
+      "sha256": "5cc58209caa93e0662d8920293cf62eb23640e5314397c20a80fea2f036bdfca",
+      "bytes": 2105,
+      "author": "Ross Crawford [rosco]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/41239.dat": {
+      "sha256": "bbcef25c514c9939f5ce641e0015606ae514d715e3a89d2fef0e4bfef1c73fa5",
+      "bytes": 1543,
+      "author": "Guy Vivan [guyvivan]",
+      "license": "Licensed under CC BY 2.0 and CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/42003.dat": {
+      "sha256": "900aabdc44901fc69043f2929704692693cc02f6e1cdc77fb85206db5f21d900",
+      "bytes": 4639,
+      "author": "Donald Sutter [technog]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/42610.dat": {
+      "sha256": "40554885c571270ee220be42303fba9135feaca03d2639067c2870b5a517d96e",
+      "bytes": 6139,
+      "author": "Michael Heidemann [mikeheide]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/4274.dat": {
+      "sha256": "c421cee48c7c0233371144f5a256f7a4503f008318ff523b31e0b5a9d44d9704",
+      "bytes": 782,
+      "author": "James Jessiman",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/43093.dat": {
+      "sha256": "6ff7c720e1492cf27e8a10a79ffb2eda93608ffea43dc3f40670f399141311b2",
+      "bytes": 658,
+      "author": "Donald Sutter [technog]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/43857.dat": {
+      "sha256": "b0612fbdd2280e8913fd1c7f18b20e4d32f133fbbbdd3a0809a67d4e37eb45c6",
+      "bytes": 1480,
+      "author": "Donald Sutter [technog]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/44294.dat": {
+      "sha256": "d8e1baae9fcc771ff6103f75cac7e2bd859fdbad4c598bda796265a4b61a3420",
+      "bytes": 697,
+      "author": "Magnus Forsberg [MagFors]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/4519.dat": {
+      "sha256": "ecec609013e9d7af63c352cb61d990077c005c4c5453e121b3d192914ab55ff0",
+      "bytes": 653,
+      "author": "James Jessiman",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/4526.dat": {
+      "sha256": "8cd9211e6e5643e1873d27c7e301de6be1f2ecfb7e549936e21dea278b00a7cd",
+      "bytes": 2352,
+      "author": "Jeff Jones [notmaster]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/4527.dat": {
+      "sha256": "d8157812814540b2c029d4d98b5d6d3230f81a1b1a092a47bb22a0a6106626f5",
+      "bytes": 31608,
+      "author": "Philippe Hurbain [Philo]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/52985.dat": {
+      "sha256": "941e787bf058b93b2da89150df292f767acce4ce8b2b753d57f65b8eb7b8ffe9",
+      "bytes": 2133,
+      "author": "Gerald Lasser [GeraldLasser]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/5426.dat": {
+      "sha256": "c9864c34e16b13fff9218147fe0a770f61cda3b2da434507f974d81ae0e6c335",
+      "bytes": 454,
+      "author": "Philippe Hurbain [Philo]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/56908.dat": {
+      "sha256": "eae65fc29336fd1071cbe6bc24ed95facd9874b7279e75969070d19851affdd1",
+      "bytes": 10439,
+      "author": "Philippe Hurbain [Philo]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/59900.dat": {
+      "sha256": "8416701912ed13937743df8dd877a2a1254925efd4adebb77950f48c3d9d5156",
+      "bytes": 1663,
+      "author": "Michael Heidemann [mikeheide]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/60483.dat": {
+      "sha256": "e9642b7d24f816f62a37ef798e2a7a21377febec2e857ce0ecc4eceb907ca47c",
+      "bytes": 544,
+      "author": "Philippe Hurbain [Philo]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/60485.dat": {
+      "sha256": "e649e13795fc8b715e86c46f33d9db857e42d6f8be50ec749e1edf9c23027746",
+      "bytes": 491,
+      "author": "Philippe Hurbain [Philo]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/61408.dat": {
+      "sha256": "d8fa8da32a1606c3659eec6e478eec0ebe562d8af488c3d2e262392ea061aa7f",
+      "bytes": 348,
+      "author": "Massimo Maso [Sirio]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/62462.dat": {
+      "sha256": "3d30f5717e76fbe3b368eacf72d24f0449f0a7ad4e1603f83a283fb5f38fb284",
+      "bytes": 2155,
+      "author": "Philippe Hurbain [Philo]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/63869.dat": {
+      "sha256": "948e6802d89ba087bc7c1357271b852eba35c55e8a91e926602b0a680e5b82fc",
+      "bytes": 9311,
+      "author": "Santeri Piippo [arezey]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/64179.dat": {
+      "sha256": "7e8e131d8c7ca9387ba9f3b79d1fbd2f089c6d28b3f3b415bcbd1224e1629834",
+      "bytes": 3613,
+      "author": "Santeri Piippo [arezey]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/64781.dat": {
+      "sha256": "573b3cca0ea2ddbe716f831f4fe605baa9c84a11628eb102761991f2f3b3a859",
+      "bytes": 1422,
+      "author": "Philippe Hurbain [Philo]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/65249.dat": {
+      "sha256": "93938ca7c62ef7802a96a4ba903bb7815cf7cc0a53494cb6e62b940290764138",
+      "bytes": 706,
+      "author": "Philippe Hurbain [Philo]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/6536.dat": {
+      "sha256": "a6d8a8a512ebf4b109a98e6cbbbc1868cec2058c771c3e7b27c7813d5676a743",
+      "bytes": 3793,
+      "author": "James Jessiman",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/65414.dat": {
+      "sha256": "02db0ee69d79e12f7df3788d20d590e6c933158f325a52a5fe9eddf64914f79f",
+      "bytes": 3762,
+      "author": "Philippe Hurbain [Philo]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/6553.dat": {
+      "sha256": "96f4262dd70bfa1b71082482cdab1a013ebeeb97608c5277a14d0bfd22eb3b05",
+      "bytes": 9739,
+      "author": "James Jessiman",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/6558.dat": {
+      "sha256": "28d5dfb1009599f84edfae076be13eb648bbfae32cdba57b12b7d7829465057c",
+      "bytes": 597,
+      "author": "James Jessiman",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/6575.dat": {
+      "sha256": "b38757ec7dfc75e107b70e89fb83e806b77cb80ae501fbbf1f6881e95fb69924",
+      "bytes": 331,
+      "author": "[PTadmin]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/6575a.dat": {
+      "sha256": "58e364b43a11f1a9e1ca11b351b6429c362aaa0aec78982b5db8a1b17cc26e8c",
+      "bytes": 5887,
+      "author": "Jeff Boen [onyx]",
+      "license": "Licensed under CC BY 2.0 and CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/6589.dat": {
+      "sha256": "8064a6eff49d283d98f2a6d8a0f6bdf9873e5a8c5059d9511eeaa8e2a4d4d3e5",
+      "bytes": 28125,
+      "author": "Jeroen Ottens [JeroenOttens]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/6628.dat": {
+      "sha256": "899f7762e5870bbd06a848c55ff08d2fba0076511384f8068c5da7df3b3e144d",
+      "bytes": 1286,
+      "author": "William Howard [WilliamH]",
+      "license": "Licensed under CC BY 2.0 and CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/6629.dat": {
+      "sha256": "a861b01f87a8312b527f24823c6b9270a7964f8e055e4acac7a12e7cf2f077e0",
+      "bytes": 3756,
+      "author": "James Jessiman",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/67491.dat": {
+      "sha256": "8f0ad95f83f955d341e28cfbaa1d52b7562279250771be3ce994fdab1ad957a0",
+      "bytes": 3185,
+      "author": "Gerald Lasser [GeraldLasser]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/6908.dat": {
+      "sha256": "86fc34696664903cc0facf2a2d145e93e853fb48160b2bb8a86ad2d836a7e590",
+      "bytes": 713,
+      "author": "Gerald Lasser [GeraldLasser]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/69636.dat": {
+      "sha256": "c9d3fe17dcd68cd8a22ac8168ff4fdb8f8e7fe14d4212fdfa91b96df19c2fc54",
+      "bytes": 2419,
+      "author": "Philippe Hurbain [Philo]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/69761.dat": {
+      "sha256": "5c13f40a24a27bcc26a1611c4f4af6cfc741e1fc51f8093bdc4508b264c9a233",
+      "bytes": 13465,
+      "author": "Jens Brühl [jb70]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/69762.dat": {
+      "sha256": "52d188957268af60b6b742ca1f5f927eea86775c0ae51c7eb94271648d50eaf4",
+      "bytes": 1955,
+      "author": "Jens Brühl [jb70]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/69819.dat": {
+      "sha256": "0ec2c75bc9f46e6e02f73b93e024e18b5dc53ad1e55f137e6408d9896a43fa51",
+      "bytes": 5588,
+      "author": "Philippe Hurbain [Philo]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/71682.dat": {
+      "sha256": "c033d9ead88a478aa6dd2663e466a6b15ecb75367657cbe5ccef6b7545732a54",
+      "bytes": 653,
+      "author": "Gerald Lasser [GeraldLasser]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/71708.dat": {
+      "sha256": "cb3588c9571b532eebe2902a3d36aff69ecaad2667af6ffcbabb279dffdc7752",
+      "bytes": 1402,
+      "author": "Gerald Lasser [GeraldLasser]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/71709.dat": {
+      "sha256": "096c3949fde89ccf3397245f8227cb4dc2c69a808949e4c11924d305ff357d6f",
+      "bytes": 2838,
+      "author": "Gerald Lasser [GeraldLasser]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/71710.dat": {
+      "sha256": "6bffe241797b914464224f3dba7bab94f017e3d6e120c4ac2115368fe68f76dc",
+      "bytes": 704,
+      "author": "Gerald Lasser [GeraldLasser]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/7229.dat": {
+      "sha256": "f90bae837027a1ba575086b2f2c8588ce647585d96a5a9a444d091f5f50c9d88",
+      "bytes": 766,
+      "author": "Rene Rechthaler [Blechtaler]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/73507.dat": {
+      "sha256": "f327c3a7a1156d58025badf4ea656599872df9b053b0f18623082a2e399221aa",
+      "bytes": 608,
+      "author": "Gerald Lasser [GeraldLasser]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/80286.dat": {
+      "sha256": "1d3e0e756d18a652d720af7cca6213b7b3f10c7d1de894c46e01527103d0972f",
+      "bytes": 6971,
+      "author": "Philippe Hurbain [Philo]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/85861.dat": {
+      "sha256": "784d1058a83110e5c883ca5f289ceda9fb6b707ed9da86a53c29a89c30197857",
+      "bytes": 913,
+      "author": "Magnus Forsberg [MagFors]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/87083.dat": {
+      "sha256": "8f6daea84fa87a632e7c996a92bf08926aa70056f89c4d0b674b8e798098dab4",
+      "bytes": 632,
+      "author": "Philippe Hurbain [Philo]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/87994.dat": {
+      "sha256": "1a6c0cb9de6da1175fbdf0bd4b7218c1a39e6dc1ff5e53b5d6080267267ee2e8",
+      "bytes": 667,
+      "author": "Chris Dee [cwdee]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/89678.dat": {
+      "sha256": "7b56ae687b68e042660d175f55cb3241329b9cbde63b2a3402eb47f1b1cf6093",
+      "bytes": 834,
+      "author": "Vincent Messenet [Cheenzo]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/89679.dat": {
+      "sha256": "5a39d6878cbcd4e21f8b040ddb298951d63a7aa77b156db5475b6838fbf4d83c",
+      "bytes": 876,
+      "author": "Gerald Lasser [GeraldLasser]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/92907.dat": {
+      "sha256": "aa8dd6af985cad0a80ec9c326ca49e94e00d57463f76fc407096b7caca8cbbe6",
+      "bytes": 10186,
+      "author": "Philippe Hurbain [Philo]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/92909.dat": {
+      "sha256": "8f5ee36d901f8446f232c3a88c914f1b3999f22608c84736652e3cf5b4c14976",
+      "bytes": 17719,
+      "author": "Philippe Hurbain [Philo]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/94925.dat": {
+      "sha256": "6ca165e0dbf843f5a990d460a24b9f4e2f8e72fa18a85e505e5c09d268771d45",
+      "bytes": 16148,
+      "author": "J.C. Tchang [tchang]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/99008.dat": {
+      "sha256": "a5671cc4ca006562873348b6852245b65fcc5f6c5986a1195dd99b28dea20f80",
+      "bytes": 1124,
+      "author": "Philippe Hurbain [Philo]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/s/15100s01.dat": {
+      "sha256": "8ac1e523dc50635810840af0312dd06cdde1351c9cd0488065c31f16c42e32e3",
+      "bytes": 1722,
+      "author": "Philippe Hurbain [Philo]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/s/2387s01.dat": {
+      "sha256": "1d2c822a01122e1066a2620f9ae8647a6ed8e48112b21c63d054901334e1857c",
+      "bytes": 7077,
+      "author": "Jens Brühl [jb70]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/s/26287s01.dat": {
+      "sha256": "9d34dc30a5da043bb806e24546e9c2d64cb2c2d076411e747156d06722e2fd39",
+      "bytes": 4235,
+      "author": "Philippe Hurbain [Philo]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/s/26287s02.dat": {
+      "sha256": "d4a09399a8e5777467e54da2eaed65907f362b56cd3781484ad64ded0c1f5eb4",
+      "bytes": 5289,
+      "author": "Philippe Hurbain [Philo]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/s/3167s01.dat": {
+      "sha256": "aefe1a724b7d852c93774254ea50739e2cbf81f25597457835503ea9e8d8f727",
+      "bytes": 4296,
+      "author": "Philippe Hurbain [Philo]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/s/32316s01.dat": {
+      "sha256": "5a15d2ac0d6ee4fa2dc0514496b29b1c1721d3bdc8afbd442f226fb1c750a86b",
+      "bytes": 800,
+      "author": "Jens Brühl [jb70]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/s/32523s01.dat": {
+      "sha256": "0a6c7501095910532c6a4184ea67f1f61d767a89dccdd6bf30c323171dc77c97",
+      "bytes": 859,
+      "author": "Philippe Hurbain [Philo]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/s/32526s01.dat": {
+      "sha256": "b6f7fcea5ded3f8a622a74401938e7f812bb1e011d2a3fc947f16972e1550aed",
+      "bytes": 2208,
+      "author": "Philippe Hurbain [Philo]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/s/33299s01.dat": {
+      "sha256": "c6c7625ed718d060677c240384d525179626019bdadc89fa73c3a055be475340",
+      "bytes": 10281,
+      "author": "Santeri Piippo [arezey]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/s/3626bs02.dat": {
+      "sha256": "3196608c3683e7d269f0f740ec1fd0c2f93c1d407067b4837e88d42b6dd6850b",
+      "bytes": 1084,
+      "author": "Willy Tschager [Holly-Wood]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/s/39790s01.dat": {
+      "sha256": "e14e52a1728ef78bf773beb890d4ca5a1e7552d17538a8f95b3c690aa5f9d099",
+      "bytes": 3822,
+      "author": "Philippe Hurbain [Philo]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/s/39790s02.dat": {
+      "sha256": "046d8f169c905f027be904f65a3d51b45a6b61436710b06fa74fc3886cdcf748",
+      "bytes": 2938,
+      "author": "Philippe Hurbain [Philo]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/s/39793s01.dat": {
+      "sha256": "8d4b7c3570ae7a57920dfbe0641d6635dca062bd6157548a1debcf6aa09978cd",
+      "bytes": 3893,
+      "author": "Philippe Hurbain [Philo]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/s/52985s01.dat": {
+      "sha256": "2323596d4d717f511a518dc6a2c6a3da8473c4d3dc6c5bc79cf09ca8d28b086a",
+      "bytes": 8175,
+      "author": "Gerald Lasser [GeraldLasser]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/s/52985s02.dat": {
+      "sha256": "a7a32f3c8faf2fa6c182eb2d899ccd0724da639da928193556948347b72e2afb",
+      "bytes": 7008,
+      "author": "Gerald Lasser [GeraldLasser]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/s/56908s01.dat": {
+      "sha256": "df1828601ac46835fcadee36bba7bb99dfa4ccbf4bc7ec1e05f06d9d220c42a0",
+      "bytes": 15394,
+      "author": "Philippe Hurbain [Philo]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/s/60483s01.dat": {
+      "sha256": "19502854a4f0a692bdf46cf90f901fbdf443aa96221fe8436965c6bd97d0b803",
+      "bytes": 922,
+      "author": "Jens Brühl [jb70]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/s/64179s01.dat": {
+      "sha256": "bb17d1bb2edc234ab451f3045c3f4ab9f2aea371d886b9eaa9374cd5f3e8b666",
+      "bytes": 4301,
+      "author": "Santeri Piippo [arezey]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/s/64781s01.dat": {
+      "sha256": "2fcbf804396963e4ea9f3ab1113ac8a923cc753cfb1cb077b51a4f2f19f8db41",
+      "bytes": 10761,
+      "author": "Philippe Hurbain [Philo]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/s/64781s02.dat": {
+      "sha256": "415b08cb9c8a31da67289d4db880e28cbc9295520c1ee216fe17fc799069052c",
+      "bytes": 950,
+      "author": "Philippe Hurbain [Philo]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/s/64782s01.dat": {
+      "sha256": "b105bce72b1be5cd5025767c011d762d21072edb7b2b7a71bdc1ea1b0bd45b6e",
+      "bytes": 3773,
+      "author": "Gerald Lasser [GeraldLasser]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/s/65414s01.dat": {
+      "sha256": "d2bb35e19bbf327b0741c9c212c79409c5ea28a4f76b90669db42135a6b9f242",
+      "bytes": 1676,
+      "author": "Philippe Hurbain [Philo]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/s/65414s02.dat": {
+      "sha256": "85ba8f30ad2c084727aeebcb62c44bbe3fc2d32b8d4b4c984a8d6d0e20883f00",
+      "bytes": 19624,
+      "author": "Philippe Hurbain [Philo]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/s/6575s01.dat": {
+      "sha256": "847baa362a20a69ded25dc73a879400cf17dcac1cf1d2c27619c6a66a4651d0c",
+      "bytes": 16976,
+      "author": "Magnus Forsberg [MagFors]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/s/67491s01.dat": {
+      "sha256": "9306e01b52265d02c58ce9f788fa1a97edc092b01d11baccc7da873d7ee5002c",
+      "bytes": 2561,
+      "author": "Gerald Lasser [GeraldLasser]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/s/69636s01.dat": {
+      "sha256": "cd23dc2535383ae116670a863c7136d543f5bf1ce24c336a5cb038ca4ff3342d",
+      "bytes": 21817,
+      "author": "Philippe Hurbain [Philo]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/s/69761s01.dat": {
+      "sha256": "5c37539faa91bab9423b9f254c8c7b22e9d4fde6cca3b22b0e598ba539119728",
+      "bytes": 2793,
+      "author": "Jens Brühl [jb70]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/s/69761s02.dat": {
+      "sha256": "bed629edefb3b531a819520b9ed2acf300b011159ac2d500a57e8d80315ece6e",
+      "bytes": 3334,
+      "author": "Jens Brühl [jb70]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/s/69762s01.dat": {
+      "sha256": "fb785545fe82104dea8285806b946ea2cfd2f9e1832bedcff083b4d455eaf40e",
+      "bytes": 5573,
+      "author": "Jens Brühl [jb70]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/s/69762s02.dat": {
+      "sha256": "f36a05495e58fde1ee3276c790bb93cda48b82ee2cdb43e72c434a2ceaad8d93",
+      "bytes": 7752,
+      "author": "Jens Brühl [jb70]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/s/71682s01.dat": {
+      "sha256": "c79b570479852e5988fcad91398ee751568b4bc72114e1160400d1dd461ceebc",
+      "bytes": 632,
+      "author": "Jens Brühl [jb70]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/s/71682s02.dat": {
+      "sha256": "11a81dbeb2ae824aed2af0e0b9c910dea3f719b22659da4e12b244a8aaa3292b",
+      "bytes": 7752,
+      "author": "Jens Brühl [jb70]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/s/71708s01.dat": {
+      "sha256": "a34805ecd0bd9801bf94fd4bab7f58b3bffb7f6e0cc610d1656747203a1b29fc",
+      "bytes": 8451,
+      "author": "Gerald Lasser [GeraldLasser]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/s/71710s01.dat": {
+      "sha256": "a78012b9411a603f78edc424d09928bc5127d335e8061ddc4e7355c34101e618",
+      "bytes": 2780,
+      "author": "Gerald Lasser [GeraldLasser]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/s/71710s02.dat": {
+      "sha256": "d5a461a990a261f97f1d71947326888f8b9885a48297f57284617c22f69b54ac",
+      "bytes": 2004,
+      "author": "Gerald Lasser [GeraldLasser]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/s/89679s01.dat": {
+      "sha256": "4f21c7c5b1f27b304f54c3fdd9914a596c315ea6f0992c2f98b84e6f0ce12cf7",
+      "bytes": 3180,
+      "author": "Jens Brühl [jb70]",
+      "license": "Licensed under CC BY 4.0 : see CAreadme.txt"
+    },
+    "ldraw/parts/u9053.dat": {
+      "sha256": "1a40608e75c29db2a6722c8bae2a16ce6c296d2ee2c86e0d9c888735c777c3f9",
+      "bytes": 619,
+      "author": "William Howard [WilliamH]",
+      "license": "Licensed under CC BY 2.0 and CC BY 4.0 : see CAreadme.txt"
+    }
+  },
+  "optimization": {
+    "originalTriangles": 1306821,
+    "maximumPartErrorMillimeters": 0.12,
+    "normalWeights": [
+      0.5,
+      0.5,
+      0.5
+    ],
+    "achievedPartErrorMillimeters": 0.1199986164768537,
+    "positionBits": 16,
+    "normalBits": 12,
+    "compression": "EXT_meshopt_compression"
+  },
+  "assetSha256": "38fc80ad8bc280d0885701cce1e279793078d27bff9d54d93c6880588d002e16",
+  "assetBytes": 7884776
+}

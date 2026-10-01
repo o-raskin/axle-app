@@ -3,6 +3,8 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
 import { BridgeProcessService } from "./bridgeProcessService";
+import { createAppUpdates } from "./appUpdates";
+import type { UpdateController } from "./updateController";
 import {
   bridgeIpcChannels,
   type BridgeLogEvent,
@@ -18,10 +20,15 @@ let mainWindow: BrowserWindow | null = null;
 let appQuitAfterBridgeStop = false;
 let appQuitPending = false;
 let pendingBridgeShutdown: Promise<void> | null = null;
+let updates: UpdateController | null = null;
+let startupUpdateChecked = false;
+let updateInstalling = false;
+let exitRequested = false;
 
 app.setName(appDisplayName);
 
 const bridgeService = new BridgeProcessService({
+  canStart: () => !updateInstalling && !exitRequested && !pendingBridgeShutdown,
   publishLog: (event: BridgeLogEvent) => {
     for (const window of BrowserWindow.getAllWindows()) {
       window.webContents.send(bridgeIpcChannels.log, event);
@@ -148,6 +155,10 @@ function installApplicationMenu(): void {
           submenu: [{ role: "reload" }, { role: "forceReload" }, { role: "toggleDevTools" }]
         }
       ]
+    },
+    {
+      label: "Help",
+      submenu: [{ id: "check-updates", label: "Check for updates…", click: () => { void updates?.check(true); } }]
     }
   ];
 
@@ -155,6 +166,26 @@ function installApplicationMenu(): void {
 }
 
 function registerIpcHandlers(): void {
+  ipcMain.handle("app:quit", async () => {
+    if (exitRequested) return { ok: false, message: "Axle is already closing." };
+    exitRequested = true;
+    try {
+      await stopBridgeBeforeClosing();
+      if (bridgeService.hasActiveProcess()) throw new Error("Vehicle control did not stop");
+      appQuitAfterBridgeStop = true;
+      app.quit();
+      return { ok: true };
+    } catch (error) {
+      exitRequested = false;
+      console.error("Could not stop the bridge before exiting", error);
+      return { ok: false, message: "Control could not be stopped. Try again or turn off the vehicle." };
+    }
+  });
+  ipcMain.handle(bridgeIpcChannels.discover, () => {
+    if (updateInstalling || exitRequested) return { ok: false, message: "Axle is closing." };
+    if (app.commandLine.hasSwitch("disable-hardware-discovery")) return { ok: true };
+    return bridgeService.startDiscovery();
+  });
   ipcMain.handle("bootstrap:get-state", () => getBootstrapState());
   ipcMain.handle("settings:get", () => readDesktopSettings());
   ipcMain.handle("settings:update", (_event, patch: DesktopSettingsPatch) => {
@@ -168,9 +199,12 @@ function registerIpcHandlers(): void {
   });
   ipcMain.handle(bridgeIpcChannels.getProfiles, () => bridgeService.getProfiles());
   ipcMain.handle(bridgeIpcChannels.getStatus, () => bridgeService.getStatus());
-  ipcMain.handle(bridgeIpcChannels.startLive, (_event, options: unknown) => bridgeService.startLive(options));
+  ipcMain.handle(bridgeIpcChannels.startLive, (_event, options: unknown) => updateInstalling || exitRequested
+    ? { ok: false, message: "Axle is restarting to install an update." }
+    : app.commandLine.hasSwitch("disable-hardware-discovery") ? { ok: true } : bridgeService.startLive(options));
   ipcMain.handle(bridgeIpcChannels.stop, () => bridgeService.stopActiveProcess());
-  ipcMain.handle(bridgeIpcChannels.runCommand, (_event, request: unknown) => bridgeService.runCommand(request));
+  ipcMain.handle(bridgeIpcChannels.runCommand, (_event, request: unknown) => updateInstalling || exitRequested
+    ? { ok: false, message: "Axle is restarting to install an update." } : bridgeService.runCommand(request));
 }
 
 function stopBridgeBeforeClosing(): Promise<void> {
@@ -183,6 +217,7 @@ function stopBridgeBeforeClosing(): Promise<void> {
 }
 
 function createMainWindow(): void {
+  exitRequested = false;
   const settings = readDesktopSettings();
 
   mainWindow = new BrowserWindow({
@@ -203,10 +238,17 @@ function createMainWindow(): void {
   });
 
   const window = mainWindow;
+  window.webContents.once("did-finish-load", () => {
+    if (!startupUpdateChecked) {
+      startupUpdateChecked = true;
+      void updates?.check();
+    }
+  });
   let closePending = false;
   let closeAfterBridgeStop = false;
 
   window.on("close", (event) => {
+    exitRequested = true;
     if (closeAfterBridgeStop || !bridgeService.hasActiveProcess()) {
       return;
     }
@@ -223,6 +265,7 @@ function createMainWindow(): void {
       }
     }).catch((error: unknown) => {
       closePending = false;
+      exitRequested = false;
       console.error("Could not stop the bridge before closing the window", error);
     });
   });
@@ -261,6 +304,7 @@ app.on("window-all-closed", () => {
 });
 
 app.on("before-quit", (event) => {
+  exitRequested = true;
   if (appQuitAfterBridgeStop || !bridgeService.hasActiveProcess()) {
     return;
   }
@@ -275,6 +319,7 @@ app.on("before-quit", (event) => {
     app.quit();
   }).catch((error: unknown) => {
     appQuitPending = false;
+    exitRequested = false;
     console.error("Could not stop the bridge before quitting", error);
   });
 });
@@ -286,6 +331,22 @@ app.on("activate", () => {
 });
 
 void app.whenReady().then(() => {
+  updates = createAppUpdates({
+    isDriving: () => bridgeService.hasActiveProcess() && bridgeService.getStatus().operation !== "discover",
+    prepareInstall: async () => {
+      updateInstalling = true;
+      await stopBridgeBeforeClosing();
+      if (bridgeService.hasActiveProcess()) throw new Error("Vehicle control did not stop");
+    },
+    failedInstall: () => { updateInstalling = false; },
+    busyChanged: (busy) => {
+      const item = Menu.getApplicationMenu()?.getMenuItemById("check-updates");
+      if (item) {
+        item.enabled = !busy;
+        item.label = busy ? "Checking / downloading update…" : "Check for updates…";
+      }
+    }
+  });
   registerIpcHandlers();
   installApplicationMenu();
   createMainWindow();

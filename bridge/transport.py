@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import asyncio
+import struct
 import sys
+import time
 from collections import deque
 from dataclasses import dataclass, field
 from typing import Any, Callable
@@ -13,6 +15,18 @@ configure_process_for_platform()
 from bleak import BleakClient, BleakScanner  # noqa: E402
 
 CHAR_UUID = "00001624-1212-efde-1623-785feabcd123"
+
+
+async def find_advertised_hub(name: str, address: str | None, timeout: float = 3.0) -> Any:
+    """Find a BLE advertisement without opening a connection or writing to the hub."""
+
+    def matches(device: Any, advertisement: Any) -> bool:
+        if address:
+            return bool(device.address.lower() == address.lower())
+        return bool(name in (advertisement.local_name or device.name or ""))
+
+    return await BleakScanner.find_device_by_filter(matches, timeout=timeout)
+
 
 # LWP3 message types we care about (byte 2 of every message).
 MSG_ATTACHED_IO = 0x04
@@ -83,6 +97,8 @@ class ModeInfo:
     symbol: str | None = None
     value_format: tuple[int, int, int, int] | None = None
     mapping: int | None = None
+    raw_range: tuple[float, float] | None = None
+    si_range: tuple[float, float] | None = None
 
 
 @dataclass
@@ -108,6 +124,8 @@ class TechnicMoveHub:
         self.attached_devices: dict[int, AttachedDevice] = {}
         self.port_infos: dict[int, PortInfo] = {}
         self.notifications: deque[bytes] = deque(maxlen=NOTIFICATION_BUFFER)
+        self.input_modes: dict[int, int] = {}
+        self.port_values: dict[int, tuple[int, bytes, float]] = {}
 
     async def connect(self) -> None:
         """Scan, connect, pair and arm every notifying characteristic."""
@@ -269,6 +287,13 @@ class TechnicMoveHub:
             self._parse_port_info(data)
         elif message_type == MSG_MODE_INFO:
             self._parse_mode_info(data)
+        elif message_type == MSG_INPUT_FORMAT_ACK and len(data) >= 10:
+            self.input_modes[data[3]] = data[4]
+            self.port_values.pop(data[3], None)
+        elif message_type == MSG_PORT_VALUE and len(data) >= 5:
+            mode = self.input_modes.get(data[3])
+            if mode is not None:
+                self.port_values[data[3]] = (mode, bytes(data[4:]), time.monotonic())
 
     def _parse_attached_io(self, data: bytearray) -> None:
         if len(data) < 5:
@@ -330,6 +355,12 @@ class TechnicMoveHub:
 
         if info_type == 0x00:
             mode_info.name = bytes(data[6:]).decode("ascii", errors="ignore").strip("\x00 ")
+        elif info_type in (0x01, 0x03) and len(data) >= 14:
+            limits = struct.unpack("<ff", bytes(data[6:14]))
+            if info_type == 0x01:
+                mode_info.raw_range = limits
+            else:
+                mode_info.si_range = limits
         elif info_type == 0x04:
             mode_info.symbol = bytes(data[6:]).decode("ascii", errors="ignore").strip("\x00 ")
         elif info_type == 0x05 and len(data) >= 8:

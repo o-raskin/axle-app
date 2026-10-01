@@ -9,13 +9,34 @@ import type {
 export type PendingAction = BridgeOperation | "stop" | null;
 
 export type ConnectionView = {
-  phase: "idle" | "connecting" | "ready" | "stopping" | "disconnected" | "error" | "diagnostic";
+  phase: "idle" | "connecting" | "ready" | "stopping" | "disconnected" | "error" | "diagnostic" | "discovering" | "detected";
   title: string;
   description: string;
   bluetoothReady: boolean;
   controllerReady: boolean;
   vehicleReady: boolean;
 };
+
+export type DiscoveryState = {
+  bluetoothReady: boolean;
+  controllerName: string | null;
+  controllerProfile: string | null;
+  vehicleName: string | null;
+  detail: string;
+};
+
+export function discoveryFromTelemetry(value: Record<string, unknown>): DiscoveryState | null {
+  if (value.kind !== "hardwareDiscovery" || typeof value.bluetoothReady !== "boolean") return null;
+  const controller = value.controller && typeof value.controller === "object" ? value.controller as Record<string, unknown> : null;
+  const vehicle = value.vehicle && typeof value.vehicle === "object" ? value.vehicle as Record<string, unknown> : null;
+  return {
+    bluetoothReady: value.bluetoothReady,
+    controllerName: typeof controller?.name === "string" ? controller.name : null,
+    controllerProfile: typeof controller?.profile === "string" ? controller.profile : null,
+    vehicleName: typeof vehicle?.name === "string" ? vehicle.name : null,
+    detail: typeof value.detail === "string" ? value.detail : ""
+  };
+}
 
 export function isProcessActive(snapshot: BridgeProcessSnapshot): boolean {
   return snapshot.status === "starting" || snapshot.status === "running" || snapshot.status === "stopping";
@@ -118,10 +139,13 @@ export function commandResultMessage(event: BridgeProtocolCommandResultEvent): s
       return "Vehicle and controller choices are up to date.";
     case "live":
       return "Drive complete.";
+    case "discover":
+      return "Device search complete.";
   }
 }
 
 export type ConnectionInput = {
+  discovery?: DiscoveryState | null;
   snapshot: BridgeProcessSnapshot;
   progress: BridgeProtocolSetupEvent | null;
   pendingAction: PendingAction;
@@ -131,6 +155,7 @@ export type ConnectionInput = {
 };
 
 export function deriveConnection({
+  discovery,
   snapshot,
   progress,
   pendingAction,
@@ -154,6 +179,7 @@ export function deriveConnection({
   const operation = pendingAction && pendingAction !== "stop" ? pendingAction : snapshot.operation;
 
   if (pendingAction === "stop") {
+    if (snapshot.operation === "discover") return view("stopping", "Stopping device search", "Wait a moment while the device scan closes.");
     return view("stopping", "Stopping your vehicle", "Wait a moment while control ends and the connection closes.");
   }
   if (actionError || snapshot.status === "error" || snapshot.error) {
@@ -169,6 +195,14 @@ export function deriveConnection({
   if (operation === "live" && hasModelMismatch(progress)) {
     return view("error", "Check your vehicle model", friendlyError("HubPortMismatch"));
   }
+  if (active && operation === "discover") {
+    const found = Boolean(discovery?.controllerName && discovery?.vehicleName);
+    return view(found ? "detected" : "discovering", found ? "Your devices are nearby" : "Finding your devices",
+      found ? "Choose your vehicle model, then start driving when you’re ready."
+        : discovery && !discovery.bluetoothReady ? friendlyError(discovery.detail || "Bluetooth unavailable")
+          : "Turn on your vehicle and pair your controller. We’ll find both.",
+      { bluetoothReady: discovery?.bluetoothReady ?? false, controllerReady: Boolean(discovery?.controllerName), vehicleReady: false });
+  }
   if (active && operation !== "live") {
     const title = operation === "scanHub" ? "Scanning your vehicle" : "Device check in progress";
     const description = operation === "scanHub"
@@ -180,7 +214,7 @@ export function deriveConnection({
   }
   if (!active) {
     if (snapshot.operation === "live" && snapshot.status === "exited") {
-      return view("disconnected", "Drive ended", "Connect again whenever you’re ready for another drive.");
+      return view("disconnected", "Drive ended", "Axle will reconnect automatically. Keep your devices nearby.");
     }
     return view("idle", "Ready when you are", "Turn on your controller and vehicle, then connect to start driving.");
   }

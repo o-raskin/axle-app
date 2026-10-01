@@ -12,6 +12,7 @@ from .audio import ReverseBeep, reverse_beep_status
 from .cars.model_profiles import DEFAULT_REQUIRED_PORT_ROLES, ModelProfile, ModelProfileChoice, available_model_choices
 from .cars.tumbler.low_level_control import LowLevelControl
 from .cars.tumbler.runtime import TumblerDriveRuntime
+from .cars.tumbler.wheel_feedback import WheelFeedback
 from .dashboard import CarTelemetry, LiveConsole, SetupConsole
 from .feedback import (
     BoostRumble,
@@ -618,6 +619,11 @@ async def run_live_session(
     console = live_console or LiveConsole()
     reconnect_reason = SESSION_EXIT
     boost_rumble = BoostRumble()
+    wheels = (
+        WheelFeedback(hub, (port_id(port_map, "drive_left"), port_id(port_map, "drive_right")), log=console.log)
+        if model.name == "42239 Batmobile Tumbler"
+        else None
+    )
 
     try:
         console.log(f"Hub ready: {len(hub.attached_devices)} ports attached")
@@ -627,6 +633,8 @@ async def run_live_session(
         virtual_port, status, flags = await control.start_play_vm()
         console.log(f"  calibration status {status:#07x}: {', '.join(flags)}")
         console.log(f"  rears mixed on virtual port {virtual_port:#04x}")
+        if wheels is not None:
+            await wheels.start()
 
         release_winrt_sta_for_pygame()
 
@@ -726,6 +734,7 @@ async def run_live_session(
                         boost_pressed=frame.boost_pressed,
                         front_lights_pressed=frame.front_lights_pressed,
                         attack_pressed=frame.attack_pressed,
+                        wheel_motion=wheels.sample(frame.throttle, frame.boost, now) if wheels is not None else None,
                     )
                 )
 
@@ -758,6 +767,8 @@ async def run_live_session(
         reconnect_reason = RECONNECT_DUALSENSE
         console.log(f"Controller input stopped: {type(exc).__name__}: {exc}")
     finally:
+        if wheels is not None:
+            await wheels.close()
         if joystick is not None:
             boost_rumble.stop(joystick)
         if reverse_beep is not None:

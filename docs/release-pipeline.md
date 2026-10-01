@@ -26,16 +26,22 @@ Python 3.12 provides pygame wheels on all four hosts; Node.js 24 LTS runs the El
    outside the source tree. Device inventory must initialize both SDL controller and joystick APIs.
 4. Native packaging and a real packaged-app smoke test: macOS DMG integrity, read-only mounting,
    ZIP extraction, strict recursive signature validation and launch from both containers;
-   Windows silent installation; Linux AppImage launch through its actual runtime, both using FUSE
-   and `APPIMAGE_EXTRACT_AND_RUN=1`, plus extracted deb launch under Xvfb.
+   Windows silent installation; Linux AppImage launch through its actual runtime using FUSE under
+   X11, and `APPIMAGE_EXTRACT_AND_RUN=1` under headless Wayland with no X11 display. The extracted
+   deb also launches under Xvfb. These checks do not claim coverage of Steam Deck GPU drivers or gamescope.
    Each app must report the intended version and load every profile through the real bundled engine.
-5. A complete inventory of four target manifests and eleven distribution files, with matching
+5. A complete inventory of four target manifests, eleven distribution files and two update feeds, with matching
    version, commit, size and SHA-256. Missing, unexpected, stale or corrupt files fail verification.
 
 Tests never connect to Bluetooth hardware. Hardware operation on each OS, including Steam Input
 in Deck Game Mode, remains a manual acceptance check. macOS apps are ad-hoc signed, without an
 Apple Developer ID or notarization. This seals the modified Electron bundle and nested executables
 correctly but does not confer Gatekeeper trust on a download. Windows packages are unsigned.
+The macOS tests launch the app executable directly; passing them does not prove that Finder will
+accept an unapproved download. Without Apple credentials, users must approve their trusted copy
+in **System Settings → Privacy & Security → Open Anyway** after attempting to open it. Release
+notes and the DMG's `Open Axle on macOS.txt` explain this step. Eliminating this approval requires
+Developer ID signing and notarization, which are outside the credential-free release setup.
 
 The AppImage uses electron-builder's checksum-pinned static runtime toolset `1.0.3`, which avoids
 the legacy runtime's dependency on host `libfuse.so.2`. A FUSE device is still needed for mounting;
@@ -65,6 +71,30 @@ commit, uploads the complete set plus `SHA256SUMS` and `release-manifest.json`, 
 inventory and sizes, then publishes. A failed upload leaves a draft. A rerun never replaces public
 assets; an already published release is accepted only when its commit and manifest match exactly.
 Rebuilding an already published version may produce different bytes; create a new run/version then.
+
+## Desktop updates
+
+The packaged update feed is explicitly pinned to `o-raskin/axle-app` on GitHub.
+The release staging step generates `latest.yml` for the Windows NSIS installer and
+`latest-linux.yml` for the Linux/Steam Deck AppImage. These JSON documents are valid
+YAML for electron-updater. They contain the release version, exact artifact filename,
+size and SHA-512 checksum. Verification regenerates the expected metadata from the
+installer bytes and rejects any mismatch, in addition to checking the complete SHA-256
+release inventory. Both feeds are uploaded into the draft together with the installers
+and become visible only when the complete release is published. Full downloads avoid
+dependencies on older release blockmaps. No GitHub token is shipped in the app.
+
+Startup checks select stable newer versions only. Downloading and restarting to install
+require separate confirmation; auto-install on ordinary quit is disabled. Vehicle
+control must stop before installation, and new bridge commands are blocked during that
+shutdown. AppImage updates stage the replacement on the destination filesystem and
+atomically replace the original path, preserving Steam shortcuts and executable permissions.
+Unsigned macOS builds offer the matching DMG for manual installation; Developer ID signing
+would be required to enable the standard macOS self-updater. Linux deb installations use
+manual package-manager installation. Packaged smoke tests disable live update checks and
+verify the embedded GitHub feed identity. Actual two-version Windows/AppImage installation
+still requires a native acceptance run; the local tests cover consent, failure recovery,
+vehicle shutdown ordering, metadata integrity and AppImage filesystem replacement.
 
 ## Local reproduction
 

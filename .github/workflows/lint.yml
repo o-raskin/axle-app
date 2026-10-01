@@ -141,7 +141,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends xvfb libgtk-3-0 libnss3 libasound2 libgbm1
+          sudo apt-get install -y --no-install-recommends xvfb weston libgtk-3-0 libnss3 libasound2 libgbm1
       - name: Build Electron with bundled native runtime
         working-directory: ui/electron
         run: |
@@ -174,9 +174,26 @@ jobs:
           sudo modprobe fuse
           test -c /dev/fuse
           xvfb-run --auto-servernum npm run test:package -- "$appimage"
-          APPIMAGE_EXTRACT_AND_RUN=1 xvfb-run --auto-servernum npm run test:package -- "$appimage"
           dpkg-deb --extract "release/Axle-${RELEASE_VERSION}-linux-amd64.deb" "$RUNNER_TEMP/axle-deb"
           xvfb-run --auto-servernum npm run test:package -- "$RUNNER_TEMP/axle-deb/opt/Axle/axle"
+      - name: Verify AppImage under Wayland without X11
+        if: runner.os == 'Linux'
+        working-directory: ui/electron
+        run: |
+          runtime_dir=$(mktemp -d "$RUNNER_TEMP/axle-wayland.XXXXXX")
+          export XDG_RUNTIME_DIR="$runtime_dir"
+          weston --backend=headless-backend.so --socket=wayland-axle --idle-time=0 &
+          weston_pid=$!
+          trap 'kill "$weston_pid" 2>/dev/null || true; wait "$weston_pid" 2>/dev/null || true; rm -rf "$runtime_dir"' EXIT
+          for attempt in {1..50}; do
+            if test -S "$runtime_dir/wayland-axle"; then break; fi
+            kill -0 "$weston_pid"
+            sleep 0.1
+          done
+          test -S "$runtime_dir/wayland-axle"
+          env -u DISPLAY XDG_SESSION_TYPE=wayland WAYLAND_DISPLAY=wayland-axle \
+            APPIMAGE_EXTRACT_AND_RUN=1 npm run test:package -- \
+            "$PWD/release/Axle-${RELEASE_VERSION}-linux-x86_64.AppImage"
       - name: Stage archives and artifact manifest
         run: >-
           python scripts/release_assets.py stage --version "$RELEASE_VERSION"

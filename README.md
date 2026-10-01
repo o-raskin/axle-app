@@ -4,6 +4,14 @@ Turn a Sony DualSense or Steam Deck controller into a tactile cockpit for a LEGO
 The current implementation is tuned for the LEGO Technic 42239 Batmobile Tumbler: analog drive,
 steering, braking, boost, automatic lights, controller LEDs, haptics, and a reverse warning beep.
 
+The application code uses Apache-2.0. The bundled Tumbler 3D assembly is a third-party
+recreation by **포기남 (Fogeyman)**, published under **CC BY-NC 4.0**, with separately
+licensed LDraw geometry. These assets are not Apache-2.0 or cleared for unrestricted
+commercial use. Some embedded mesh permissions and underlying design rights remain
+unverified. See the [model license](ui/electron/models/tumbler/LICENSE.md),
+[rights and remaining gaps](ui/electron/models/tumbler/RIGHTS.md), and
+[creator/part notices](ui/electron/models/tumbler/generated/THIRD-PARTY-NOTICES.md).
+
 > Current scope: macOS + DualSense, and Linux/Steam Deck + Steam Input/Xbox-style controller
 > mappings. The shipped profiles are `config/gamepads/dualsense.json`,
 > `config/gamepads/steamdeck.json`, `config/gamepads/generic_sdl.json`, and
@@ -79,7 +87,9 @@ Replace `VERSION` with the release number. Extract terminal archives before runn
 on Windows its filename ends in `.exe`. Both editions include Python, SDL and the built-in profiles.
 The release includes `SHA256SUMS` and `release-manifest.json` for download verification.
 
-On Steam Deck, use the AppImage for normal launching:
+On Steam Deck, use the AppImage in Desktop Mode. Open its **Properties → Permissions**, enable
+**Is executable**, then open it. Browser downloads do not retain executable permission. The
+equivalent Terminal commands are:
 
 ```bash
 chmod +x ./Axle-VERSION-linux-x86_64.AppImage
@@ -91,17 +101,28 @@ provides the command-line interface for scripting and debugging. The AppImage bu
 library; it does not require installing FUSE 2 on SteamOS. If mounting is unavailable, launch with
 `./Axle-VERSION-linux-x86_64.AppImage --appimage-extract-and-run`.
 
-macOS desktop builds are ad-hoc signed, with no paid Apple Developer ID or notarization. After
-copying Axle from the DMG to Applications, a downloaded app can still require a one-time Gatekeeper
-exception. For a download you trust (verify its checksum against `SHA256SUMS`), clear quarantine
-on that app only, then open it:
+macOS desktop builds are ad-hoc signed and are not notarized by Apple. The first launch of a
+downloaded build requires your approval; builds without Apple Developer credentials cannot remove
+this macOS check. For a release you trust, verify its checksum against `SHA256SUMS`, then:
+
+1. Copy Axle from the DMG (or extracted ZIP) to Applications and open it.
+2. If macOS says Apple could not verify Axle, dismiss the alert with **Done**.
+3. Open **System Settings → Privacy & Security**, scroll to **Security**, and choose
+   **Open Anyway** for Axle. Confirm **Open** and authenticate if asked.
+
+The approval applies to Axle only. If the button is missing, try opening Axle again; macOS shows
+it for about an hour after an attempted launch. See [Apple's opening instructions](https://support.apple.com/en-us/102445).
+The DMG also includes `Open Axle on macOS.txt` with these steps.
+
+If the graphical approval is unavailable, the following Terminal fallback removes quarantine only
+from the trusted copy in Applications, then opens it:
 
 ```bash
 xattr -dr com.apple.quarantine /Applications/Axle.app
 open /Applications/Axle.app
 ```
 
-This does not turn off Gatekeeper system-wide. The v0.1.13 DMG also had an invalid bundle signature;
+The v0.1.13 DMG also had an invalid bundle signature;
 use a rebuilt release with the packaging fix rather than treating that error as download corruption.
 
 If macOS blocks a downloaded unsigned binary, remove the download quarantine and run it again:
@@ -148,6 +169,8 @@ to reconnect to the exact same hub, pass its BLE address:
 
 On Steam Deck, download the AppImage in Desktop Mode, mark it executable, and add the AppImage to
 Steam as a Non-Steam Game if you want to launch it from Game Mode. Use a gamepad Steam Input layout.
+Leave **Force the use of a specific Steam Play compatibility tool** unchecked; the AppImage is
+a native Linux application and does not use Proton.
 
 If startup remains stuck on `Gamepad controller detected`, run:
 

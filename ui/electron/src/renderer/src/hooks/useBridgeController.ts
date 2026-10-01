@@ -15,13 +15,17 @@ import type { DesktopSettings } from "../../../shared/settings";
 import {
   commandResultMessage,
   deriveConnection,
+  discoveryFromTelemetry,
+  type DiscoveryState,
   friendlyError,
   isProcessActive,
   updateLiveReadiness,
   type PendingAction
 } from "../lib/session";
+import { AutomaticSession } from "../lib/automaticSession";
+import { VEHICLE_FEEDBACK_MAX_AGE_MS, WHEEL_FEEDBACK_MAX_AGE_MS } from "../lib/vehicleState";
 
-export function useBridgeController() {
+export function useBridgeController(automaticEnabled = true) {
   const [bootstrapState, setBootstrapState] = useState<BootstrapState | null>(null);
   const [settings, setSettings] = useState<DesktopSettings | null>(null);
   const [profiles, setProfiles] = useState<BridgeProfileCatalog | null>(null);
@@ -31,6 +35,7 @@ export function useBridgeController() {
   const [commandResults, setCommandResults] = useState<BridgeProtocolCommandResultEvent[]>([]);
   const [currentProgress, setCurrentProgress] = useState<BridgeProtocolSetupEvent | null>(null);
   const [telemetry, setTelemetry] = useState<Record<string, unknown> | null>(null);
+  const [telemetryReceivedAt, setTelemetryReceivedAt] = useState<number | null>(null);
   const [selectedModel, setSelectedModel] = useState("");
   const [selectedGamepad, setSelectedGamepad] = useState("auto");
   const [hubName, setHubName] = useState("Technic Move");
@@ -46,6 +51,8 @@ export function useBridgeController() {
   const [initializationAttempt, setInitializationAttempt] = useState(0);
   const [liveTelemetryReceived, setLiveTelemetryReceived] = useState(false);
   const [sessionWasReady, setSessionWasReady] = useState(false);
+  const [discovery, setDiscovery] = useState<DiscoveryState | null>(null);
+  const [discoveryReceivedAt, setDiscoveryReceivedAt] = useState<number | null>(null);
 
   const mounted = useRef(false);
   const snapshotRef = useRef<BridgeProcessSnapshot>({ status: "idle" });
@@ -56,6 +63,8 @@ export function useBridgeController() {
   const settingsPending = useRef(false);
   const initialProfilesLoaded = useRef(false);
   const diagnosticId = useRef(0);
+  const automaticSession = useRef<AutomaticSession | null>(null);
+  const automaticEnabledRef = useRef(automaticEnabled);
 
   const appendDiagnostic = useCallback((context: string, error: unknown): void => {
     const detail = error instanceof Error ? error.stack ?? error.message : String(error);
@@ -77,6 +86,7 @@ export function useBridgeController() {
       progressRef.current = null;
       setCurrentProgress(null);
       setTelemetry(null);
+      setTelemetryReceivedAt(null);
       setLiveTelemetryReceived(false);
       setSessionWasReady(false);
       setActionError(null);
@@ -84,6 +94,9 @@ export function useBridgeController() {
     }
     snapshotRef.current = snapshot;
     setBridgeStatus(snapshot);
+    if (snapshot.status !== "running" || snapshot.operation !== "live") {
+      setTelemetryReceivedAt(null);
+    }
     if (snapshot.error) {
       appendDiagnostic("Connection status", snapshot.error);
       setActionError((current) => current ?? friendlyError(snapshot.error));
@@ -91,6 +104,12 @@ export function useBridgeController() {
       setActionError((current) => current ?? friendlyError("Connection failed"));
     }
   }, [appendDiagnostic]);
+
+  useEffect(() => {
+    automaticEnabledRef.current = automaticEnabled;
+    automaticSession.current?.setEnabled(automaticEnabled);
+    if (automaticEnabled) void automaticSession.current?.reconcile();
+  }, [automaticEnabled]);
 
   useEffect(() => {
     let alive = true;
@@ -123,12 +142,23 @@ export function useBridgeController() {
         const previousProgress = progressRef.current;
         setLiveTelemetryReceived((current) => updateLiveReadiness(current, event, currentSnapshot, previousProgress));
         if (event.type === "setup/progress") {
+          setTelemetryReceivedAt(null);
           progressRef.current = event;
           setCurrentProgress(event);
         } else if (event.type === "telemetry") {
+          if (event.telemetry.kind === "hardwareDiscovery") {
+            if (currentSnapshot.operation === "discover") {
+              setDiscovery(discoveryFromTelemetry(event.telemetry));
+              setDiscoveryReceivedAt(Date.now());
+            }
+            return;
+          }
           setTelemetry(event.telemetry);
           if (updateLiveReadiness(false, event, currentSnapshot, previousProgress)) {
             setSessionWasReady(true);
+            setTelemetryReceivedAt(currentSnapshot.status === "running" ? Date.now() : null);
+          } else {
+            setTelemetryReceivedAt(null);
           }
         } else if (event.type === "command/result") {
           setCommandResults((current) => [...current, event].slice(-20));
@@ -136,8 +166,11 @@ export function useBridgeController() {
           if (event.ok) setActionMessage(commandResultMessage(event));
           else setActionError(commandResultMessage(event));
         } else if (event.type === "error") {
+          setTelemetryReceivedAt(null);
           appendDiagnostic(event.errorType, event.message);
           setActionError(friendlyError(`${event.errorType}: ${event.message}`));
+        } else if (event.type === "exit") {
+          setTelemetryReceivedAt(null);
         }
       }));
     } catch (error) {
@@ -181,8 +214,8 @@ export function useBridgeController() {
       if (profileResult.status === "fulfilled") {
         const catalog = profileResult.value;
         const preserveSelection = initialProfilesLoaded.current;
-        setProfiles(catalog);
-        setSelectedModel((current) => catalog.models.some((item) => item.id === current) ? current : catalog.defaults.model);
+        setProfiles({ ...catalog, models: catalog.models.filter((model) => model.id === "tumbler") });
+        setSelectedModel((current) => current === "tumbler" ? current : catalog.models.some((item) => item.id === "tumbler") ? "tumbler" : "");
         setSelectedGamepad((current) => preserveSelection && catalog.gamepads.some((item) => item.id === current)
           ? current : catalog.defaults.gamepad);
         if (!initialProfilesLoaded.current) setHubName(catalog.defaults.hubName);
@@ -203,6 +236,53 @@ export function useBridgeController() {
       }
     };
   }, [initializationAttempt, appendDiagnostic, receiveStatus]);
+
+  useEffect(() => {
+    if (!window.legoBridgeUi) return;
+    const session = new AutomaticSession(window.legoBridgeUi, (message) => {
+      appendDiagnostic("Automatic connection", message);
+      setActionError(friendlyError(message));
+    });
+    session.setEnabled(automaticEnabledRef.current);
+    automaticSession.current = session;
+    const timer = window.setInterval(() => { void session.reconcile(); }, 3000);
+    return () => { session.dispose(); window.clearInterval(timer); automaticSession.current = null; };
+  }, [appendDiagnostic]);
+
+  useEffect(() => {
+    if (loading || startupError || profileError || !profiles || !settings || !selectedModel) return;
+    const timeout = window.setTimeout(() => {
+      automaticSession.current?.configure({ modelId: selectedModel, gamepadId: selectedGamepad, hubName, hubAddress });
+    }, 300);
+    return () => window.clearTimeout(timeout);
+  }, [loading, startupError, profileError, profiles, settings, selectedModel, selectedGamepad, hubName, hubAddress]);
+
+  useEffect(() => {
+    if (discoveryReceivedAt === null) return;
+    const timeout = window.setTimeout(() => setDiscovery(null), Math.max(0, discoveryReceivedAt + 4000 - Date.now()));
+    return () => window.clearTimeout(timeout);
+  }, [discoveryReceivedAt]);
+
+  useEffect(() => {
+    if (telemetryReceivedAt === null) return;
+    // Expiration must trigger a render even when a silent connection delivers
+    // no further events. Each new live frame replaces this timeout.
+    const timeout = window.setTimeout(() => {
+      setTelemetryReceivedAt((current) => current === telemetryReceivedAt ? null : current);
+    }, Math.max(0, telemetryReceivedAt + VEHICLE_FEEDBACK_MAX_AGE_MS + 1 - Date.now()));
+    return () => window.clearTimeout(timeout);
+  }, [telemetryReceivedAt]);
+
+  useEffect(() => {
+    const wheel = telemetry?.wheel_motion;
+    if (!wheel || typeof wheel !== "object" || telemetryReceivedAt === null) return;
+    const sampleAge = (wheel as Record<string, unknown>).sample_age_ms;
+    if (typeof sampleAge !== "number" || !Number.isFinite(sampleAge)) return;
+    const timeout = window.setTimeout(() => {
+      setTelemetry((current) => current === telemetry ? { ...current, wheel_motion: null } : current);
+    }, Math.max(0, telemetryReceivedAt + WHEEL_FEEDBACK_MAX_AGE_MS - sampleAge + 1 - Date.now()));
+    return () => window.clearTimeout(timeout);
+  }, [telemetry, telemetryReceivedAt]);
 
   const retryInitialization = (): void => {
     if (loading || startPending.current || stopPending.current) return;
@@ -233,7 +313,7 @@ export function useBridgeController() {
 
   const runAction = async (kind: "live" | BridgeCommandKind): Promise<void> => {
     const requiresProfile = kind !== "gamepadDevices" && kind !== "audioDevices";
-    if (startPending.current || stopPending.current || isProcessActive(snapshotRef.current)
+    if (startPending.current || stopPending.current || (isProcessActive(snapshotRef.current) && snapshotRef.current.operation !== "discover")
       || loading || startupError
       || (requiresProfile && (profileError || !profiles || !selectedModel || !selectedGamepad))) return;
     startPending.current = true;
@@ -243,6 +323,7 @@ export function useBridgeController() {
     progressRef.current = null;
     setCurrentProgress(null);
     setTelemetry(null);
+    setTelemetryReceivedAt(null);
     setLiveTelemetryReceived(false);
     setSessionWasReady(false);
     const revisionBeforeStart = statusRevision.current;
@@ -276,6 +357,7 @@ export function useBridgeController() {
   const stopBridge = async (): Promise<void> => {
     if (stopPending.current || !isProcessActive(snapshotRef.current)
       || (snapshotRef.current.status === "stopping" && !actionError)) return;
+    const wasDiscovery = snapshotRef.current.operation === "discover";
     stopPending.current = true;
     setPendingAction("stop");
     setActionMessage(null);
@@ -287,7 +369,8 @@ export function useBridgeController() {
         appendDiagnostic("Stopping connection", result.message ?? "Stop rejected");
         setActionError(friendlyError(result.message ?? "Stop rejected", "stop"));
       } else {
-        setActionMessage("Control stopped. You can connect again whenever you’re ready.");
+        setActionMessage(wasDiscovery ? "Device search stopped. Start driving whenever you’re ready."
+          : "Control stopped. You can connect again whenever you’re ready.");
         const revisionBeforeRefresh = statusRevision.current;
         const snapshot = await window.legoBridgeUi.getBridgeStatus();
         if (mounted.current && statusRevision.current === revisionBeforeRefresh) receiveStatus(snapshot);
@@ -306,9 +389,11 @@ export function useBridgeController() {
   const bridgeActive = isProcessActive(bridgeStatus) || pendingAction !== null;
   const canStop = isProcessActive(bridgeStatus) && pendingAction !== "stop"
     && (bridgeStatus.status !== "stopping" || Boolean(actionError));
-  const controlsDisabled = bridgeActive || loading || Boolean(startupError || profileError)
+  const discoveryActive = bridgeStatus.operation === "discover" && isProcessActive(bridgeStatus);
+  const controlsDisabled = (bridgeActive && !discoveryActive) || loading || Boolean(startupError || profileError)
     || profiles === null || !selectedModel || !selectedGamepad;
   const connection = deriveConnection({
+    discovery,
     snapshot: bridgeStatus,
     progress: currentProgress,
     pendingAction,
@@ -318,7 +403,7 @@ export function useBridgeController() {
   });
 
   return {
-    bootstrapState, settings, profiles, bridgeStatus, logs, protocolEvents, currentProgress, telemetry,
+    bootstrapState, settings, profiles, bridgeStatus, logs, protocolEvents, currentProgress, telemetry, telemetryReceivedAt, discovery, discoveryActive,
     selectedModel, setSelectedModel, selectedGamepad, setSelectedGamepad, hubName, setHubName,
     hubAddress, setHubAddress, loading, startupError, profileError, settingsError, actionError, actionMessage,
     bridgeActive, canStop, controlsDisabled, pendingAction, connection, settingsSaving,

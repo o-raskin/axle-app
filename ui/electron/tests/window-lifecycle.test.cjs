@@ -17,6 +17,9 @@ async function desktopHarness(active = true) {
   const errors = [];
   let stopCalls = 0;
   let quitCompleted = false;
+  let updateOptions;
+  let updateCheckCalls = 0;
+  const handlers = new Map();
 
   function cancelableEvent() {
     return { prevented: false, preventDefault() { this.prevented = true; } };
@@ -73,11 +76,12 @@ async function desktopHarness(active = true) {
   }
 
   const imports = {
-    electron: { app, BrowserWindow: Window, ipcMain: { handle() {} }, Menu: { buildFromTemplate() {}, setApplicationMenu() {} }, shell: { openExternal() {} } },
+    electron: { app, BrowserWindow: Window, ipcMain: { handle: (name, callback) => handlers.set(name, callback) }, Menu: { buildFromTemplate() {}, setApplicationMenu() {} }, shell: { openExternal() {} } },
     "node:fs": { mkdirSync() {}, readFileSync() { throw new Error("No saved settings"); }, writeFileSync() {} },
     "node:path": path,
     "./bridgeProcessService": { BridgeProcessService },
-    "../shared/bridge": { bridgeIpcChannels: {} },
+    "./appUpdates": { createAppUpdates: (options) => { updateOptions = options; return { check: async () => { updateCheckCalls += 1; } }; } },
+    "../shared/bridge": { bridgeIpcChannels: { startLive: "bridge:start", runCommand: "bridge:command", discover: "bridge:discover" } },
     "../shared/bootstrap": { buildTargets: [], runtimeItems: [] },
     "../shared/settings": { defaultDesktopSettings: { launchFullscreen: false } }
   };
@@ -93,11 +97,54 @@ async function desktopHarness(active = true) {
   await flush();
 
   return {
-    app, window: windows[0], errors, pendingStops,
+    app, window: windows[0], errors, pendingStops, updateOptions, handlers,
+    get updateCheckCalls() { return updateCheckCalls; },
     get stopCalls() { return stopCalls; },
     get quitCompleted() { return quitCompleted; }
   };
 }
+
+test("startup update check runs once after the renderer loads", async () => {
+  const desktop = await desktopHarness(false);
+  assert.equal(desktop.updateCheckCalls, 0);
+  desktop.window.webContents.emit("did-finish-load");
+  desktop.window.webContents.emit("did-finish-load");
+  await flush();
+  assert.equal(desktop.updateCheckCalls, 1);
+});
+
+test("update preparation stops vehicle control and blocks new bridge commands", async () => {
+  const desktop = await desktopHarness();
+  const preparing = desktop.updateOptions.prepareInstall();
+  assert.equal(desktop.stopCalls, 1);
+  for (const name of ["bridge:start", "bridge:command"]) {
+    assert.equal(desktop.handlers.get(name)({}, {}).ok, false);
+  }
+  desktop.pendingStops[0].resolve();
+  await preparing;
+});
+
+test("touch Exit waits for motor cleanup and blocks new sessions before quitting", async () => {
+  const desktop = await desktopHarness();
+  const exiting = desktop.handlers.get("app:quit")();
+  assert.equal(desktop.quitCompleted, false);
+  assert.equal(desktop.handlers.get("bridge:start")({}, {}).ok, false);
+  assert.equal(desktop.handlers.get("bridge:discover")().ok, false);
+  desktop.pendingStops[0].resolve();
+  assert.equal((await exiting).ok, true);
+  assert.equal(desktop.quitCompleted, true);
+});
+
+test("failed Exit cleanup keeps the app open and allows retry", async () => {
+  const desktop = await desktopHarness();
+  const exiting = desktop.handlers.get("app:quit")();
+  desktop.pendingStops[0].reject(new Error("cleanup failed"));
+  assert.equal((await exiting).ok, false);
+  assert.equal(desktop.quitCompleted, false);
+  const retry = desktop.handlers.get("app:quit")();
+  desktop.pendingStops[1].resolve();
+  assert.equal((await retry).ok, true);
+});
 
 test("idle window closes immediately and keeps the established app identity", async () => {
   const desktop = await desktopHarness(false);
@@ -148,4 +195,15 @@ test("failed shutdown retains the control window and allows a later retry", asyn
   desktop.pendingStops[1].resolve();
   await flush();
   assert.equal(desktop.window.isDestroyed(), true);
+});
+
+test("automatic startup cannot restart control during window close or app quit", async () => {
+  for (const action of ["close", "quit"]) {
+    const desktop = await desktopHarness();
+    if (action === "close") desktop.window.close(); else desktop.app.quit();
+    assert.equal(desktop.handlers.get("bridge:start")({}, {}).ok, false);
+    assert.equal(desktop.handlers.get("bridge:discover")().ok, false);
+    desktop.pendingStops[0].resolve();
+    await flush();
+  }
 });

@@ -4,11 +4,22 @@ import test from "node:test";
 import {
   commandResultMessage,
   deriveConnection,
+  discoveryFromTelemetry,
   friendlyError,
   setupReadiness,
   updateLiveReadiness,
   type ConnectionInput
 } from "../src/renderer/src/lib/session.ts";
+
+test("discovered devices never establish a live connection or arm vehicle visuals", () => {
+  const discovery = discoveryFromTelemetry({ kind: "hardwareDiscovery", bluetoothReady: true,
+    controller: { name: "DualSense", profile: "dualsense" }, vehicle: { name: "Technic Move" } });
+  const view = deriveConnection(input({ snapshot: { status: "running", operation: "discover" }, discovery, liveTelemetryReceived: true }));
+  assert.equal(view.phase, "detected");
+  assert.equal(view.controllerReady, true);
+  assert.equal(view.vehicleReady, false);
+  assert.equal(discoveryFromTelemetry({ kind: "vehicle", bluetoothReady: true }), null);
+});
 
 const progress = (controller = true, vehicle = true, ready = true) => ({
   protocol: "lego-technic-bridge" as const,

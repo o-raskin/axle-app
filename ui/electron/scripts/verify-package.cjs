@@ -31,7 +31,7 @@ async function main() {
       // AppRun must make the same sandbox decision as a normal desktop launch.
       // Playwright otherwise injects --no-sandbox and can conceal startup failures.
       chromiumSandbox: executablePath.endsWith(".AppImage"),
-      args: [`--user-data-dir=${path.join(temporary, "user-data")}`], timeout: 90000
+      args: [`--user-data-dir=${path.join(temporary, "user-data")}`, "--disable-update-check", "--disable-hardware-discovery"], timeout: 90000
     });
     const runtime = await application.evaluate(({ app }) => ({
       packaged: app.isPackaged, version: app.getVersion(),
@@ -41,6 +41,12 @@ async function main() {
     assert.equal(runtime.packaged, true);
     assert.equal(runtime.version, process.env.RELEASE_VERSION || metadata.version);
     assert.equal(runtime.arch, process.arch);
+    if (process.platform === "win32" || runtime.appImage) {
+      const updateFeed = require("js-yaml").load(await fs.readFile(path.join(runtime.resources, "app-update.yml"), "utf8"));
+      assert.equal(updateFeed.provider, "github");
+      assert.equal(updateFeed.owner, "o-raskin");
+      assert.equal(updateFeed.repo, "axle-app");
+    }
     if (process.platform === "linux" && executablePath.endsWith(".AppImage")) {
       assert.ok(runtime.appImage && runtime.appDir, "The AppImage runtime must start the app");
       assert.equal(runtime.resources, path.join(runtime.appDir, "resources"));
@@ -67,6 +73,11 @@ async function main() {
       assert.equal(await hash(helper), await hash(sourceHelper));
     }
     assert.equal(await hash(path.join(runtime.resources, "LICENSE")), await hash(path.join(root, "LICENSE")));
+    const electronRoot = path.resolve(__dirname, "..");
+    for (const resource of metadata.build.extraResources.filter((item) => item.to.startsWith("licenses/"))) {
+      assert.equal(await hash(path.join(runtime.resources, resource.to)),
+        await hash(path.resolve(electronRoot, resource.from)), `Packaged notice is missing or changed: ${resource.to}`);
+    }
     const window = await application.firstWindow();
     const errors = [];
     window.on("pageerror", (error) => errors.push(error.message));

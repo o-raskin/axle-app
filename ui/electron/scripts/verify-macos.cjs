@@ -19,10 +19,13 @@ try {
   run("hdiutil", ["verify", `${stem}.dmg`]);
   run("hdiutil", ["attach", "-readonly", "-nobrowse", "-mountpoint", mount, `${stem}.dmg`]);
   mounted = true;
+  const instructions = "Open Axle on macOS.txt";
+  assert.deepEqual(fs.readFileSync(path.join(mount, instructions)), fs.readFileSync(path.join(root, "resources", instructions)));
   check(mount);
   const zip = path.join(temporary, "zip");
   run("ditto", ["-x", "-k", `${stem}.zip`, zip]);
   check(zip);
+  console.log("Verified macOS bundle integrity and runtime. Downloaded builds still require per-app Gatekeeper approval; they are not notarized.");
 } finally {
   // If unmounting fails, leave the directory intact rather than traversing a mount.
   if (mounted) run("hdiutil", ["detach", mount]);

@@ -14,6 +14,8 @@ import type { BootstrapState } from "../shared/bootstrap";
 import type { DesktopSettings, DesktopSettingsPatch } from "../shared/settings";
 
 const desktopApi = {
+  quitApp: (): Promise<BridgeActionResult> => ipcRenderer.invoke("app:quit") as Promise<BridgeActionResult>,
+  discoverHardware: (): Promise<BridgeActionResult> => ipcRenderer.invoke(bridgeIpcChannels.discover) as Promise<BridgeActionResult>,
   getBootstrapState: (): Promise<BootstrapState> => ipcRenderer.invoke("bootstrap:get-state") as Promise<BootstrapState>,
   getSettings: (): Promise<DesktopSettings> => ipcRenderer.invoke("settings:get") as Promise<DesktopSettings>,
   updateSettings: (patch: DesktopSettingsPatch): Promise<DesktopSettings> =>

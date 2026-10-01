@@ -27,6 +27,7 @@ type PythonInvocation = {
 type ManagedBridgeChild = ChildProcessByStdio<Writable, Readable, Readable>;
 
 type BridgeProcessPublisher = {
+  canStart?: () => boolean;
   publishLog: (event: BridgeLogEvent) => void;
   publishStatus: (snapshot: BridgeProcessSnapshot) => void;
   publishEvent: (event: BridgeProtocolEvent) => void;
@@ -40,6 +41,7 @@ const protocolVersion = 1;
 const protocolStatuses: BridgeProcessStatus[] = ["idle", "starting", "running", "stopping", "exited", "error"];
 const protocolOperations: BridgeOperation[] = [
   "live",
+  "discover",
   "scanHub",
   "probeGamepad",
   "gamepadDevices",
@@ -319,6 +321,7 @@ export class BridgeProcessService {
 
   async startLive(options: unknown): Promise<BridgeActionResult> {
     try {
+      await this.stopDiscovery();
       if (this.child) {
         return {
           ok: false,
@@ -348,6 +351,7 @@ export class BridgeProcessService {
 
   async runCommand(request: unknown): Promise<BridgeActionResult> {
     try {
+      await this.stopDiscovery();
       if (this.child) {
         return {
           ok: false,
@@ -386,6 +390,21 @@ export class BridgeProcessService {
     } catch (error) {
       return this.failAction(error);
     }
+  }
+
+  async startDiscovery(): Promise<BridgeActionResult> {
+    if (this.child) return { ok: true, sessionId: this.currentSnapshot.sessionId };
+    try {
+      const catalog = await this.getProfiles();
+      const args = ["--discover", "--name", catalog.defaults.hubName];
+      return this.startManagedProcess("discover", args);
+    } catch (error) {
+      return this.failAction(error);
+    }
+  }
+
+  private async stopDiscovery(): Promise<void> {
+    if (this.currentSnapshot.operation === "discover" && this.child) await this.stopForAppQuit();
   }
 
   async stopActiveProcess(): Promise<BridgeActionResult> {
@@ -458,6 +477,9 @@ export class BridgeProcessService {
   }
 
   private async startManagedProcess(operation: BridgeOperation, scriptArgs: string[]): Promise<BridgeActionResult> {
+    if (this.publisher.canStart && !this.publisher.canStart()) {
+      return { ok: false, message: "Axle is closing or installing an update." };
+    }
     if (this.child) {
       return {
         ok: false,

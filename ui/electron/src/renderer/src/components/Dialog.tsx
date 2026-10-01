@@ -19,7 +19,7 @@ export function Dialog({ title, subtitle, onClose, children }: DialogProps) {
     dialog?.showModal();
     return () => {
       dialog?.close();
-      previousFocus?.focus();
+      previousFocus?.focus({ preventScroll: true });
     };
   }, []);
 

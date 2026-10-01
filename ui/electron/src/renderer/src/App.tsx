@@ -5,13 +5,17 @@ import { controllerControls } from "./components/controllerControls";
 import { DiagnosticsView, type DiagnosticTab } from "./components/DiagnosticsView";
 import { Icon } from "./components/Icon";
 import { SettingsDialog } from "./components/SettingsDialog";
+import { TumblerViewer } from "./components/TumblerViewer";
 import { VehicleIllustration } from "./components/VehicleIllustration";
 import { useBridgeController } from "./hooks/useBridgeController";
+import { deriveVehicleVisualState, isTumblerModel } from "./lib/vehicleState";
 
 type Sheet = "settings" | "controls" | null;
 
 const connectionStatusLabels = {
   ready: "Connected",
+  discovering: "Searching",
+  detected: "Devices found",
   connecting: "Connecting",
   stopping: "Stopping",
   diagnostic: "Checking devices",
@@ -21,19 +25,28 @@ const connectionStatusLabels = {
 };
 
 function App() {
-  const bridge = useBridgeController();
   const [sheet, setSheet] = useState<Sheet>(null);
   const [showDebug, setShowDebug] = useState(false);
   const [debugTab, setDebugTab] = useState<DiagnosticTab>("results");
   const [page, setPage] = useState<"drive" | "diagnostics">("drive");
+  const bridge = useBridgeController(page === "drive");
+  const [exiting, setExiting] = useState(false);
+  const [exitError, setExitError] = useState<string | null>(null);
   const { connection } = bridge;
   const ready = connection.phase === "ready";
   const busy = connection.phase === "connecting" || connection.phase === "stopping";
   const impactPaused = ready && bridge.telemetry?.crash === true;
-  const activeDiagnostic = bridge.bridgeActive && bridge.bridgeStatus.operation !== "live";
+  const vehicleNearby = bridge.discoveryActive && Boolean(bridge.discovery?.vehicleName);
   const selectedModel = bridge.profiles?.models.find((model) => model.id === bridge.selectedModel);
   const modelNumber = selectedModel?.name.match(/^\d+/)?.[0];
   const vehicleName = selectedModel?.name.replace(/^\d+\s*/, "") || "Choose your vehicle";
+  const tumbler = isTumblerModel(bridge.selectedModel);
+  const vehicleState = deriveVehicleVisualState({
+    telemetry: bridge.telemetry,
+    selectedModelId: bridge.selectedModel,
+    ready,
+    receivedAt: bridge.telemetryReceivedAt
+  });
   const controls = controllerControls(bridge.selectedGamepad);
   const statusText = impactPaused ? "Control paused" : connectionStatusLabels[connection.phase];
   const connectionTitle = bridge.profileError
@@ -49,75 +62,43 @@ function App() {
     }
   }, [showDebug]);
 
+  async function quitApp() {
+    if (exiting) return;
+    setExiting(true);
+    setExitError(null);
+    try {
+      const result = await window.legoBridgeUi.quitApp();
+      if (!result.ok) throw new Error(result.message);
+    } catch {
+      setExiting(false);
+      setExitError("Axle could not confirm that control has stopped. Try Exit again, or turn off the vehicle.");
+    }
+  }
+
+  const exitButton = (
+    <button type="button" className="exit-button" aria-label="Quit Axle" title="Quit Axle"
+      onClick={() => { void quitApp(); }} disabled={exiting}>
+      <Icon name="exit" /><span>{exiting ? "Exiting…" : "Exit"}</span>
+    </button>
+  );
+  const exitNotice = exitError && <div className="notice notice--error" role="alert"><Icon name="warning" /><p>{exitError}</p></div>;
+
   function renderConnectionAction() {
-    if (bridge.bridgeActive || bridge.pendingAction === "stop") {
-      if (activeDiagnostic) {
-        return (
-          <>
-            <p className="small-note">A device check is running.</p>
-            <button
-              type="button"
-              className="button button--stop"
-              onClick={bridge.stopBridge}
-              disabled={!bridge.canStop || bridge.pendingAction === "stop"}
-            >
-              <Icon name="pause" />Stop device check
-            </button>
-          </>
-        );
-      }
-
-      const stopLabel = bridge.pendingAction === "stop" || connection.phase === "stopping"
-        ? "Stopping…"
-        : ready ? "Stop driving" : "Cancel connection";
-      return (
-        <button
-          type="button"
-          className="button button--stop"
-          onClick={bridge.stopBridge}
-          disabled={!bridge.canStop || bridge.pendingAction === "stop"}
-        >
-          <Icon name="pause" />{stopLabel}
-        </button>
-      );
-    }
-
-    if (bridge.profileError) {
-      return (
-        <button type="button" className="button button--primary" onClick={bridge.retryInitialization}>
-          Try again <Icon name="arrow" />
-        </button>
-      );
-    }
-
-    return (
-      <button
-        type="button"
-        className="button button--primary"
-        onClick={bridge.startLiveControl}
-        disabled={bridge.controlsDisabled || !!bridge.pendingAction}
-      >
-        {bridge.pendingAction === "live" ? (
-          <><span className="spinner" />Connecting…</>
-        ) : (
-          <>
-            {connection.phase === "error" || connection.phase === "disconnected"
-              ? "Reconnect vehicle"
-              : "Connect vehicle"}
-            <Icon name="arrow" />
-          </>
-        )}
-      </button>
-    );
+    if (bridge.profileError) return <button type="button" className="button button--primary" onClick={bridge.retryInitialization}>Try again</button>;
+    return <p className="small-note" role="status">{ready
+      ? "Ready to drive. Use your controller."
+      : "Axle connects and reconnects your devices automatically."}</p>;
   }
 
   if (bridge.loading) {
     return (
       <main className="startup">
+        <div className="startup-exit">{exitButton}</div>
         <div className="brand-mark" aria-hidden="true"><span /><span /></div>
         <span className="spinner" />
         <h1>Getting things ready</h1>
         <p>Your next drive is a moment away.</p>
+        {exitNotice}
         {bridge.bridgeActive && (
           <button type="button" className="button button--stop" onClick={bridge.stopBridge} disabled={!bridge.canStop}>
             <Icon name="pause" />{bridge.pendingAction === "stop" ? "Stopping…" : "Stop session"}
@@ -130,8 +111,10 @@ function App() {
   if (bridge.startupError || !bridge.bootstrapState || !bridge.settings) {
     return (
       <main className="startup">
+        <div className="startup-exit">{exitButton}</div>
         <Icon name="warning" size={36} />
         <h1>Let’s try that again</h1>
+        {exitNotice}
         <p>
           {bridge.startupError || bridge.settingsError
             || "The desktop app could not start. Restart the app and try again."}
@@ -191,10 +174,12 @@ function App() {
           >
             <Icon name="settings" />
           </button>
+          {exitButton}
         </div>
       </header>
 
       <main id="main" className="workspace" tabIndex={-1}>
+        {exitNotice}
         <div className="page-heading">
           <div>
             <p className="eyebrow">{page === "drive" ? "GOOD TIMES. BUILT BY YOU." : "A CLOSER LOOK"}</p>
@@ -211,24 +196,27 @@ function App() {
         {page === "drive" ? (
           <>
             <div className="drive-layout">
-              <section className={`vehicle-card ${ready ? "vehicle-card--connected" : ""}`} aria-label="Your vehicle">
+              <section className={`vehicle-card ${ready ? "vehicle-card--connected" : ""} ${tumbler ? "vehicle-card--3d" : ""}`} aria-label="Your vehicle">
                 <div className="vehicle-card__heading">
                   <span className="eyebrow">YOUR VEHICLE</span>
-                  <span className="vehicle-tag">GAMEPAD CONTROL</span>
+                  <span className="vehicle-tag">{tumbler ? "INTERACTIVE 3D" : "GAMEPAD CONTROL"}</span>
                 </div>
-                <div className="vehicle-art"><VehicleIllustration connected={ready} /></div>
+                <div className="vehicle-art">{tumbler
+                  ? <TumblerViewer state={vehicleState} receivedAt={bridge.telemetryReceivedAt} />
+                  : <VehicleIllustration connected={ready} />}</div>
                 <div className="vehicle-card__bottom">
                   <div className="vehicle-name">
                     <p className="eyebrow">{modelNumber ? `MODEL ${modelNumber}` : "YOUR BUILD"}</p>
                     <h2>{vehicleName}</h2>
                     <p>Built for a real-world adventure.</p>
                   </div>
-                  {bridge.profiles && bridge.profiles.models.length > 1 && (
+                  {bridge.profiles && bridge.profiles.models.length > 0 && (
                     <label className="vehicle-picker">
                       <span className="sr-only">Vehicle model</span>
                       <select
+                        aria-label="Vehicle model"
                         value={bridge.selectedModel}
-                        disabled={bridge.bridgeActive || !!bridge.pendingAction}
+                        disabled={bridge.loading || Boolean(bridge.profileError)}
                         onChange={(event) => bridge.setSelectedModel(event.target.value)}
                       >
                         {bridge.profiles.models.map((model) => (
@@ -237,7 +225,7 @@ function App() {
                       </select>
                     </label>
                   )}
-                  <span className="vehicle-card__motif" aria-hidden="true"><i /><i /><i /></span>
+                  {!tumbler && <span className="vehicle-card__motif" aria-hidden="true"><i /><i /><i /></span>}
                 </div>
               </section>
 
@@ -257,7 +245,7 @@ function App() {
                     <span className="device-icon"><Icon name="controller" size={25} /></span>
                     <div>
                       <strong>Controller</strong>
-                      <span>{connection.controllerReady ? "Connected to your computer" : "Pair with your computer"}</span>
+                      <span>{bridge.discoveryActive && bridge.discovery?.controllerName || (connection.controllerReady ? "Connected to your computer" : "Pair with your computer")}</span>
                     </div>
                     <span
                       className={`device-state ${connection.controllerReady ? "device-state--done" : ""}`}
@@ -270,13 +258,13 @@ function App() {
                     <span className="device-icon"><Icon name="vehicle" size={25} /></span>
                     <div>
                       <strong>Vehicle</strong>
-                      <span>{connection.vehicleReady ? "Hub connected" : "Press your hub’s power button"}</span>
+                      <span>{vehicleNearby ? "Hub detected nearby" : connection.vehicleReady ? "Hub connected" : "Press your hub’s power button"}</span>
                     </div>
                     <span
-                      className={`device-state ${connection.vehicleReady ? "device-state--done" : ""}`}
-                      aria-label={connection.vehicleReady ? "Vehicle connected" : "Vehicle waiting"}
+                      className={`device-state ${connection.vehicleReady || vehicleNearby ? "device-state--done" : ""}`}
+                      aria-label={vehicleNearby ? "Vehicle detected" : connection.vehicleReady ? "Vehicle connected" : "Vehicle waiting"}
                     >
-                      {connection.vehicleReady ? <Icon name="check" size={15} /> : "2"}
+                      {connection.vehicleReady || vehicleNearby ? <Icon name="check" size={15} /> : "2"}
                     </span>
                   </div>
                 </div>

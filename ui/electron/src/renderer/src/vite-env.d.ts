@@ -15,6 +15,8 @@ import type { DesktopSettings, DesktopSettingsPatch } from "../../shared/setting
 declare global {
   interface Window {
     legoBridgeUi: {
+      quitApp: () => Promise<BridgeActionResult>;
+      discoverHardware: () => Promise<BridgeActionResult>;
       getBootstrapState: () => Promise<BootstrapState>;
       getSettings: () => Promise<DesktopSettings>;
       updateSettings: (patch: DesktopSettingsPatch) => Promise<DesktopSettings>;

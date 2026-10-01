@@ -47,6 +47,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--probe", action="store_true", help="Log gamepad axes/buttons without connecting to the hub")
     parser.add_argument("--gamepad-devices", action="store_true", help="Print SDL/Pygame gamepad diagnostics and exit")
     parser.add_argument("--scan-hub", action="store_true", help="Scan the hub and save the car port map")
+    parser.add_argument(
+        "--discover", action="store_true", help="Passively detect nearby hardware (JSONL frontend only)"
+    )
     parser.add_argument("--profiles-json", action="store_true", help="Print available profiles as JSON and exit")
     parser.add_argument(
         "--audio-devices",
@@ -70,6 +73,8 @@ async def main(argv: Sequence[str] | None = None) -> int:
     """Parse CLI arguments and dispatch the requested bridge mode."""
     parser = build_parser()
     args = parser.parse_args(argv)
+    if args.discover and args.frontend != "jsonl":
+        parser.error("--discover requires --frontend jsonl")
 
     if args.frontend == "jsonl":
         return await run_jsonl_frontend(args, control_stream=sys.stdin)
