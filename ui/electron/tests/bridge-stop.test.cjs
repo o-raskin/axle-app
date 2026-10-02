@@ -4,22 +4,25 @@ const path = require("node:path");
 const { PassThrough } = require("node:stream");
 const { test } = require("node:test");
 const vm = require("node:vm");
+const { vmCoverageFilename } = require("./helpers/vm-coverage.cjs");
 const { buildSync } = require("esbuild");
 
 const compiled = buildSync({
   entryPoints: [path.join(__dirname, "../src/main/bridgeProcessService.ts")],
-  bundle: true, platform: "node", format: "cjs", write: false, external: ["electron"]
+  bundle: true, platform: "node", format: "cjs", write: false, external: ["electron"],
+  sourcemap: "inline", sourceRoot: `${path.resolve(__dirname, "../")}/`,
+  absWorkingDir: path.resolve(__dirname, "../")
 }).outputFiles[0].text;
 
 function harness() {
   const timers = new Map();
-  const execute = vm.runInNewContext(`(function(require, module, exports) { ${compiled}\n})`, {
+  const module = { exports: {} };
+  vm.runInNewContext(compiled, {
+    require: (id) => id === "electron" ? { app: {} } : require(id), module, exports: module.exports,
     console, process: { platform: "win32" }, Date,
     setTimeout(callback, duration) { timers.set(duration, callback); return duration; },
     clearTimeout(timer) { timers.delete(timer); }
-  });
-  const module = { exports: {} };
-  execute((id) => id === "electron" ? { app: {} } : require(id), module, module.exports);
+  }, { filename: vmCoverageFilename(compiled, path.join(__dirname, "../src/main/bridgeProcessService.ts.cjs")) });
   const service = new module.exports.BridgeProcessService({ publishLog() {}, publishStatus() {}, publishEvent() {} });
   const child = new EventEmitter();
   const signals = [];

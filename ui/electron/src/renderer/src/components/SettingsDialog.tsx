@@ -27,7 +27,7 @@ export function SettingsDialog({
         <h3>Vehicle</h3>
         <label className="field">
           <span>Vehicle model</span>
-          <select value={bridge.selectedModel} disabled={!bridge.profiles || bridge.loading}
+          <select aria-label="Vehicle model" value={bridge.selectedModel} disabled={!bridge.profiles || bridge.loading}
             onChange={(event) => bridge.setSelectedModel(event.target.value)}>
             {bridge.profiles?.models.map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}
           </select>

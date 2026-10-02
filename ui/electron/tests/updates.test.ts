@@ -141,3 +141,27 @@ test("AppImage replacement preserves the exact Steam shortcut path and executabl
     assert.throws(() => replaceAppImage(next, link));
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
+
+
+test("a drive started while install consent is open is never stopped for an update", async () => {
+  let driving = false;
+  const h = harness({ isDriving: () => driving, consent: async (stage) => {
+    if (stage === "install") driving = true;
+    return true;
+  } });
+  await h.controller.check();
+  assert.ok(h.calls.includes("download"));
+  assert.ok(!h.calls.includes("stop-control"));
+  assert.ok(!h.calls.includes("install"));
+});
+
+test("manual release selection never returns an installer for an unsupported platform or architecture", () => {
+  const name = "Axle-0.1.15-linux-amd64.deb";
+  const url = `${releaseBaseUrl}/download/v0.1.15/${name}`;
+  const release = { tag_name: "v0.1.15", draft: false, prerelease: false,
+    assets: [{ name, size: 123, browser_download_url: url }] };
+  assert.deepEqual(manualRelease(release, "linux", "x64"), { version: "0.1.15", url });
+  for (const [platform, arch] of [["linux", "arm64"], ["linux", "ia32"], ["win32", "x64"], ["darwin", "ia32"]]) {
+    assert.equal(manualRelease(release, platform, arch), null);
+  }
+});

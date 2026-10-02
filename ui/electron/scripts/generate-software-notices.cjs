@@ -1,5 +1,5 @@
 // Preserve the licenses of third-party code bundled into the desktop application.
-const { mkdirSync, readFileSync, readdirSync, writeFileSync } = require("node:fs");
+const { mkdirSync, readFileSync, readdirSync, realpathSync, writeFileSync } = require("node:fs");
 const { dirname, join, resolve } = require("node:path");
 
 const packages = [
@@ -11,6 +11,7 @@ const packages = [
 ];
 
 function generateNotices(root) {
+  root = realpathSync(root);
   const lock = JSON.parse(readFileSync(join(root, "package-lock.json"), "utf8"));
   const separator = "=".repeat(72);
   const sections = packages.map(({ name, licenseFile }) => {
@@ -54,6 +55,7 @@ function generateNotices(root) {
       if (!files.length) throw new Error(`No original license file found for ${name}. Review before packaging.`);
       license = files.map((file) => readFileSync(join(directory, file), "utf8")).join("\n");
     }
+    if (!license.trim()) throw new Error(`The license files for ${name} are empty. Review before packaging.`);
     runtimeSections.push(`${separator}\n${name} ${installed.version}\nLicense: ${installed.license}\nSource: ${packagePath}\n${separator}\n\n${license}\n`);
     for (const dependency of Object.keys(installed.dependencies || {})) includeRuntimeDependency(dependency, directory);
   }

@@ -112,6 +112,18 @@ test("duplicate and out-of-order sample times cannot create extra wheel travel",
   close(motion.advance(300), 1);
 });
 
+test("out-of-order feedback cannot expire a newer interpolation prematurely", () => {
+  const motion = start();
+  feed(motion, 100, 1);
+  feed(motion, 200, 2);
+  // The delayed old packet still has a valid age, but would reduce the current
+  // expiry from 800 ms to 220 ms if its lifetime were applied before ordering.
+  feed(motion, 210, 900, {}, { sample_time: 30.05, sample_age_ms: 590 });
+  close(motion.advance(320), 2);
+  close(motion.angularVelocity, 0);
+  assert.equal(motion.pending, false);
+});
+
 test("delayed samples use hub sample time rather than frontend receipt spacing", () => {
   const motion = start();
   feed(motion, 150, 1, {}, { sample_time: 30.1, sample_age_ms: 50 });

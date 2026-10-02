@@ -52,6 +52,31 @@ jobs:
           tar -xzf "$archive" -C "$RUNNER_TEMP" actionlint
           "$RUNNER_TEMP/actionlint" -color
 
+  python-compatibility:
+    name: Python 3.9 runtime and live startup
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.9'
+          cache: pip
+          cache-dependency-path: requirements*.txt
+      - run: python -m pip install -r requirements.txt
+      - name: Verify minimum development runtime including real session startup
+        run: python -m pytest tests -q --cov --cov-report=term-missing --cov-report=xml:coverage.xml
+      - name: Retain Python coverage
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: python-coverage
+          path: coverage.xml
+          if-no-files-found: ignore
+          retention-days: 7
+
   frontend:
     name: Electron lint, tests and UI verification
     runs-on: ubuntu-22.04
@@ -72,7 +97,15 @@ jobs:
       - name: Electron lint
         run: npm run lint
       - name: Electron unit tests
-        run: npm test
+        run: npm run test:coverage
+      - name: Retain Electron coverage
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: electron-coverage
+          path: ui/electron/coverage/
+          if-no-files-found: ignore
+          retention-days: 7
       - name: Electron production renderer
         run: npm run build
       - name: Install display dependencies
@@ -94,7 +127,7 @@ jobs:
 
   native:
     name: Native packages (${{ matrix.target }})
-    needs: [source, frontend]
+    needs: [source, python-compatibility, frontend]
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 40
     strategy:
@@ -209,7 +242,7 @@ jobs:
   verified:
     name: Verify complete release
     if: always()
-    needs: [source, frontend, native]
+    needs: [source, python-compatibility, frontend, native]
     runs-on: ubuntu-22.04
     timeout-minutes: 10
     steps:

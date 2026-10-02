@@ -88,3 +88,73 @@ test("failed startup retries after backoff without requiring a button", async ()
   await h.session.reconcile(Date.now() + 5000);
   assert.deepEqual(h.calls, ["tumbler"]);
 });
+
+
+test("disposing during the initial status request prevents a queued automatic start", async () => {
+  const h = harness();
+  let complete!: (snapshot: BridgeProcessSnapshot) => void;
+  h.api.getBridgeStatus = () => new Promise((resolve) => { complete = resolve; });
+  h.session.configure(options());
+  h.session.dispose();
+  complete({ status: "idle" });
+  await tick();
+  assert.deepEqual(h.calls, []);
+  assert.deepEqual(h.errors, []);
+});
+
+test("opening diagnostics during shutdown prevents the pending driving handover", async () => {
+  const h = harness(); h.session.configure(options()); await tick();
+  let finish!: () => void;
+  const gate = new Promise<void>((resolve) => { finish = resolve; });
+  const stop = h.api.stopBridge;
+  h.api.stopBridge = async () => { await gate; return stop(); };
+  h.session.configure(options("next")); await tick();
+  h.session.setEnabled(false); finish(); await tick();
+  assert.deepEqual(h.calls, ["tumbler", "stop"]);
+  h.session.setEnabled(true); await h.session.reconcile();
+  assert.deepEqual(h.calls, ["tumbler", "stop", "next"]);
+});
+
+test("a selection change while starting stops the accepted worker before applying the newest choice", async () => {
+  const h = harness();
+  let finish!: () => void;
+  const gate = new Promise<void>((resolve) => { finish = resolve; });
+  const start = h.api.startBridge;
+  h.api.startBridge = async (value) => { await gate; return start(value); };
+  h.session.configure(options()); await tick();
+  h.session.configure(options("latest")); finish(); await tick();
+  assert.deepEqual(h.calls, ["tumbler", "stop", "latest"]);
+});
+
+test("retry backoff starts when a slow request fails, after its elapsed connection time", async (t) => {
+  t.mock.timers.enable({ apis: ["Date"], now: 10000 });
+  const h = harness();
+  let rejectStart!: (error: Error) => void;
+  h.api.startBridge = () => new Promise((_resolve, reject) => { rejectStart = reject; });
+  h.session.configure(options()); await tick();
+  t.mock.timers.tick(10000);
+  rejectStart(new Error("catalog timeout")); await tick();
+  let attempts = 0;
+  h.api.startBridge = async () => { attempts += 1; return { ok: false }; };
+  await h.session.reconcile();
+  assert.equal(attempts, 0);
+  t.mock.timers.tick(2999); await h.session.reconcile();
+  assert.equal(attempts, 0);
+  t.mock.timers.tick(1); await h.session.reconcile();
+  assert.equal(attempts, 1);
+});
+
+test("explicit scheduler time remains the retry clock when requests fail", async (t) => {
+  t.mock.timers.enable({ apis: ["Date"], now: 10000 });
+  const h = harness();
+  h.session.setEnabled(false); h.session.configure(options());
+  let attempts = 0;
+  h.api.startBridge = async () => { attempts += 1; return { ok: false }; };
+  h.session.setEnabled(true);
+  await h.session.reconcile(100);
+  assert.equal(attempts, 1);
+  await h.session.reconcile(3099);
+  assert.equal(attempts, 1);
+  await h.session.reconcile(3101);
+  assert.equal(attempts, 2);
+});

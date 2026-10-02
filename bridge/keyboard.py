@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import select
 import sys
+import time
 from types import TracebackType
 from typing import IO, Any, Type, cast
 
@@ -29,6 +30,7 @@ POSIX_ARROW_SEQUENCE_LEN = 3
 WINDOWS_EXTENDED_PREFIXES = {b"\x00", b"\xe0"}
 WINDOWS_UP = b"H"
 WINDOWS_DOWN = b"P"
+ESCAPE_SEQUENCE_TIMEOUT_S = 0.05
 
 
 class TerminalKeyPoller:
@@ -40,6 +42,8 @@ class TerminalKeyPoller:
         self._fd: int | None = None
         self._original_attrs: list[int | list[bytes | int]] | None = None
         self._buffer = b""
+        self._escape_started_at: float | None = None
+        self._windows_prefix = False
 
     def __enter__(self) -> "TerminalKeyPoller":
         """Start polling and return this poller."""
@@ -57,6 +61,8 @@ class TerminalKeyPoller:
 
     def open(self) -> None:
         """Put the input TTY into cbreak mode when possible."""
+        if self._fd is not None:
+            return
         if termios is None or tty is None:
             return
         if not hasattr(self.stream, "isatty") or not self.stream.isatty():
@@ -99,24 +105,34 @@ class TerminalKeyPoller:
         msvcrt_mod = cast(Any, msvcrt)
         while msvcrt_mod.kbhit():
             key = msvcrt_mod.getch()
+            if self._windows_prefix:
+                self._windows_prefix = False
+                if key == WINDOWS_UP:
+                    return "up"
+                if key == WINDOWS_DOWN:
+                    return "down"
+                continue
             if key in ENTER_KEYS:
                 return "confirm"
             if key == ESCAPE:
                 return "cancel"
-            if key in WINDOWS_EXTENDED_PREFIXES and msvcrt_mod.kbhit():
-                extended = msvcrt_mod.getch()
-                if extended == WINDOWS_UP:
-                    return "up"
-                if extended == WINDOWS_DOWN:
-                    return "down"
+            if key in WINDOWS_EXTENDED_PREFIXES:
+                self._windows_prefix = True
         return None
 
     def _consume_posix_action(self) -> str | None:
         action = None
         if not self._buffer:
             return action
-        if self._buffer.startswith(POSIX_ARROW_PREFIX) and len(self._buffer) < POSIX_ARROW_SEQUENCE_LEN:
-            return action
+        if self._buffer == ESCAPE or (
+            self._buffer.startswith(POSIX_ARROW_PREFIX) and len(self._buffer) < POSIX_ARROW_SEQUENCE_LEN
+        ):
+            now = time.monotonic()
+            if self._escape_started_at is None:
+                self._escape_started_at = now
+            if now - self._escape_started_at < ESCAPE_SEQUENCE_TIMEOUT_S:
+                return action
+        self._escape_started_at = None
         if self._buffer.startswith(POSIX_UP):
             self._buffer = self._buffer[len(POSIX_UP) :]
             action = "up"
@@ -158,6 +174,8 @@ class TerminalExitPoller:
 
     def open(self) -> None:
         """Put the input TTY into cbreak mode when possible."""
+        if self._fd is not None:
+            return
         if termios is None or tty is None:
             return
         if not hasattr(self.stream, "isatty") or not self.stream.isatty():

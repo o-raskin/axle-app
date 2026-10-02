@@ -38,12 +38,25 @@ export async function createTumblerModel(): Promise<TumblerModel> {
 export function bindTumblerModel(root: THREE.Group): TumblerModel {
   const geometries = new Set<THREE.BufferGeometry>();
   const materials = new Set<THREE.Material>();
+  const textures = new Set<THREE.Texture>();
+  let disposed = false;
+  function dispose() {
+    if (disposed) return;
+    disposed = true;
+    root.clear();
+    geometries.forEach((geometry) => geometry.dispose());
+    materials.forEach((material) => material.dispose());
+    textures.forEach((texture) => texture.dispose());
+  }
   root.traverse((object) => {
     if (!(object instanceof THREE.Mesh)) return;
     geometries.add(object.geometry);
     const surfaces = Array.isArray(object.material) ? object.material : [object.material];
     for (const surface of surfaces) {
       materials.add(surface);
+      for (const value of Object.values(surface)) {
+        if (value instanceof THREE.Texture) textures.add(value);
+      }
       if (!(surface instanceof THREE.MeshStandardMaterial)) continue;
       // Black ABS stays neutral rather than taking LDraw's navy display tint.
       if (/^LDraw_0:/.test(surface.name)) {
@@ -59,8 +72,7 @@ export function bindTumblerModel(root: THREE.Group): TumblerModel {
   function group(name: string): THREE.Object3D {
     const object = root.getObjectByName(name);
     if (!object) {
-      geometries.forEach((geometry) => geometry.dispose());
-      materials.forEach((material) => material.dispose());
+      dispose();
       throw new Error(`Missing Tumbler assembly: ${name}`);
     }
     return object;
@@ -70,6 +82,27 @@ export function bindTumblerModel(root: THREE.Group): TumblerModel {
   const frontLights = [group("frontLightLeft"), group("frontLightRight")];
   const reverseLights = [group("reverseLightFrontLeft"), group("reverseLightFrontRight"), group("reverseLightRear")];
   const jetLight = group("jetLight");
+  root.updateMatrixWorld(true);
+  function geometryBounds(object: THREE.Object3D): THREE.Box3 {
+    const box = new THREE.Box3().setFromObject(object);
+    if (box.isEmpty() || ![...box.min.toArray(), ...box.max.toArray()].every(Number.isFinite)) {
+      dispose();
+      throw new Error(`Invalid Tumbler assembly geometry: ${object.name}`);
+    }
+    return box;
+  }
+  const bounds = geometryBounds(root);
+  const wheelBounds = wheelSpins.map(geometryBounds);
+  const radii = wheelBounds.map((box) => (box.max.y - box.min.y) / 2);
+  if (radii.some((radius) => radius <= 0)) {
+    dispose();
+    throw new Error("Invalid Tumbler wheel radius");
+  }
+  const rollRadius = (radii[2] + radii[3]) / 2;
+  const wheelRollRatios = radii.map((radius) => rollRadius / radius);
+  const lampBounds = frontLights.map(geometryBounds);
+  const jetBounds = geometryBounds(jetLight);
+  const reverseAnchors = reverseLights.map((light) => geometryBounds(light).getCenter(new THREE.Vector3()));
   const frontMaterial = new THREE.MeshStandardMaterial({
     name: "Tumbler front light feedback", color: "#eef4db", emissive: "#eef4db", emissiveIntensity: 0.04,
     roughness: 0.25
@@ -113,15 +146,6 @@ export function bindTumblerModel(root: THREE.Group): TumblerModel {
       object.material = Array.isArray(object.material) ? illuminated : illuminated[0];
     });
   }
-  root.updateMatrixWorld(true);
-  const bounds = new THREE.Box3().setFromObject(root);
-  const wheelBounds = wheelSpins.map((wheel) => new THREE.Box3().setFromObject(wheel));
-  const radii = wheelBounds.map((box) => (box.max.y - box.min.y) / 2);
-  const rollRadius = (radii[2] + radii[3]) / 2;
-  const wheelRollRatios = radii.map((radius) => rollRadius / radius);
-  const lampBounds = frontLights.map((lamp) => new THREE.Box3().setFromObject(lamp));
-  const jetBounds = new THREE.Box3().setFromObject(jetLight);
-  const reverseAnchors = reverseLights.map((light) => new THREE.Box3().setFromObject(light).getCenter(new THREE.Vector3()));
   const steeringAnchors = wheelBounds.slice(0, 2).map((box) => {
     const anchor = box.getCenter(new THREE.Vector3());
     anchor.z = box.max.z - 0.035;
@@ -159,10 +183,6 @@ export function bindTumblerModel(root: THREE.Group): TumblerModel {
         light.emissiveIntensity = on ? 2.4 : 0.04;
       }
     },
-    dispose() {
-      root.clear();
-      geometries.forEach((geometry) => geometry.dispose());
-      materials.forEach((material) => material.dispose());
-    }
+    dispose
   };
 }

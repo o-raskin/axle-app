@@ -2,19 +2,19 @@ import type { VehiclePart, VehicleVisualState } from "../lib/vehicleState";
 
 export type CameraView = "overview" | "combined" | VehiclePart;
 export type CameraIntent = { view: CameraView; steeringBias: number; moving: boolean };
-export type CameraShot = { offset: [number, number, number]; focus: VehiclePart | "overview" };
+export type CameraShot = { offset: [number, number, number]; focus: VehiclePart | "overview"; targetYOffset?: number };
 
 // +Z is forward. Drive/boost are rear chase views; reverse looks into the open
 // cockpit from the front. An elevated side view accommodates opposing effects.
 export const CAMERA_SHOTS: Record<CameraView, CameraShot> = {
-  overview: { offset: [5.2, 2.75, 5.8], focus: "overview" },
-  steering: { offset: [6.2, 2.7, 5.3], focus: "steering" },
-  drive: { offset: [4.8, 2.9, -7.6], focus: "overview" },
-  reverse: { offset: [-5.8, 5.6, 4.0], focus: "reverse" },
-  lights: { offset: [-4.5, 2.8, 6.5], focus: "lights" },
-  attack: { offset: [4.6, 3.2, 6.7], focus: "lights" },
-  boost: { offset: [5.3, 2.7, -7.6], focus: "overview" },
-  combined: { offset: [8.8, 5.8, 1.4], focus: "overview" }
+  overview: { offset: [4.25, 1.95, 4.85], focus: "overview", targetYOffset: -0.3 },
+  steering: { offset: [4.6, 1.35, 3.5], focus: "steering" },
+  drive: { offset: [3.8, 1.6, -6.2], focus: "overview", targetYOffset: -0.3 },
+  reverse: { offset: [-5.1, 4.95, 3.52], focus: "reverse" },
+  lights: { offset: [-3.7, 1.6, 4.8], focus: "lights" },
+  attack: { offset: [3.9, 2.6, 5.0], focus: "lights" },
+  boost: { offset: [3.9, 1.4, -6.0], focus: "overview", targetYOffset: -0.3 },
+  combined: { offset: [7.25, 3.7, 1.15], focus: "overview", targetYOffset: -0.3 }
 };
 
 /** One composition for all resolved controls, rather than cycling through them. */
@@ -59,3 +59,4 @@ export function stepCameraSpring(current: SpringValue, destination: number, dt: 
 
 export const CAMERA_INTENT_DWELL_MS = 320;
 export const CAMERA_IDLE_DWELL_MS = 1_000;
+export const CAMERA_FRAMING_MIN_ASPECT = 1.55;

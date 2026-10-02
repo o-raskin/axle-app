@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { lstat, mkdir, readFile, readdir, rename, writeFile } from 'node:fs/promises';
+import { lstat, mkdir, mkdtemp, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { zipSync, unzipSync } from 'three/addons/libs/fflate.module.js';
 
@@ -25,7 +25,8 @@ export async function readTumblerSourceBundle(archivePath, expectedSha256) {
   const entries = unzipSync(bytes);
   if (!entries[inventoryName]) throw new Error('CAD archive has no source inventory');
   const manifest = JSON.parse(Buffer.from(entries[inventoryName]).toString('utf8'));
-  if (manifest.format !== 1 || !manifest.files || typeof manifest.files !== 'object') {
+  if (!manifest || typeof manifest !== 'object' || Array.isArray(manifest)
+    || manifest.format !== 1 || !manifest.files || typeof manifest.files !== 'object' || Array.isArray(manifest.files)) {
     throw new Error('Unsupported CAD archive inventory');
   }
   const names = Object.keys(manifest.files).sort();
@@ -37,7 +38,10 @@ export async function readTumblerSourceBundle(archivePath, expectedSha256) {
     if (!sourceName(name)) throw new Error(`Unexpected CAD archive member: ${name}`);
     const file = entries[name];
     const record = manifest.files[name];
-    if (!file || file.byteLength !== record.bytes || sha256(file) !== record.sha256) {
+    if (!record || typeof record !== 'object' || Array.isArray(record)
+      || !Number.isSafeInteger(record.bytes) || record.bytes < 0
+      || typeof record.sha256 !== 'string' || !/^[0-9a-f]{64}$/.test(record.sha256)
+      || !file || file.byteLength !== record.bytes || sha256(file) !== record.sha256) {
       throw new Error(`CAD source checksum mismatch: ${name}`);
     }
     files.set(name, Buffer.from(file));
@@ -72,19 +76,26 @@ export async function packTumblerSourceBundle(directory, archivePath, archiveNot
   entries[inventoryName] = Buffer.from(`${JSON.stringify(inventory, null, 2)}\n`);
   const bytes = zipSync(entries, { level: 9, mtime: new Date(1980, 0, 1) });
   await mkdir(path.dirname(archivePath), { recursive: true });
-  const temporary = `${archivePath}.partial`;
-  await writeFile(temporary, bytes);
-  const bundle = await readTumblerSourceBundle(temporary, sha256(bytes));
-  await rename(temporary, archivePath);
-  return bundle;
+  const temporaryDirectory = await mkdtemp(path.join(path.dirname(archivePath), '.cad-source-'));
+  const temporary = path.join(temporaryDirectory, 'bundle.zip');
+  try {
+    await writeFile(temporary, bytes, { flag: 'wx' });
+    const bundle = await readTumblerSourceBundle(temporary, sha256(bytes));
+    await rename(temporary, archivePath);
+    return bundle;
+  } finally {
+    await rm(temporaryDirectory, { recursive: true, force: true });
+  }
 }
 
 /** Refuse an existing destination; never overwrite a user's extracted edits. */
 export async function extractTumblerSourceBundle(bundle, destination) {
+  for (const name of bundle.files.keys()) {
+    if (!sourceName(name)) throw new Error(`Unexpected CAD archive member: ${name}`);
+  }
   await mkdir(path.dirname(destination), { recursive: true });
   await mkdir(destination);
   for (const [name, bytes] of bundle.files) {
-    if (!sourceName(name)) throw new Error(`Unexpected CAD archive member: ${name}`);
     const target = path.join(destination, ...name.split('/'));
     await mkdir(path.dirname(target), { recursive: true });
     await writeFile(target, bytes, { flag: 'wx' });

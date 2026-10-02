@@ -1,0 +1,9 @@
+{
+  "all": true,
+  "src": ["src", "scripts"],
+  "include": ["src/**", "scripts/**"],
+  "exclude": ["**/*.d.ts"],
+  "exclude-after-remap": true,
+  "reporter": ["text", "json", "json-summary"],
+  "reports-dir": "coverage"
+}

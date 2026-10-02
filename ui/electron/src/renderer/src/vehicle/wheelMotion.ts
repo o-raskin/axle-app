@@ -49,8 +49,10 @@ export class WheelMotion {
       this.angularVelocity = 0;
       return;
     }
-    this.expiresAt = animationTime + WHEEL_FEEDBACK_MAX_AGE_MS - age;
     const last = this.points.at(-1);
+    // A stale packet cannot shorten or extend the lifetime of newer feedback.
+    if (this.running && this.session === sample.session && last && sample.sampleTime <= last.sampleTime) return;
+    this.expiresAt = animationTime + WHEEL_FEEDBACK_MAX_AGE_MS - age;
     // A new session starts from the visible pose. Hidden/reduced-motion
     // intervals also establish an origin without replaying missed travel.
     if (!this.running || this.session !== sample.session || !last
@@ -61,8 +63,6 @@ export class WheelMotion {
       this.points = [{ time: animationTime - age, position: this.rotation, sampleTime: sample.sampleTime }];
       return;
     }
-    // Repeated polling snapshots and out-of-order packets cannot invent travel.
-    if (sample.sampleTime <= last.sampleTime) return;
     this.points.push({
       time: sample.sampleTime * 1_000 + this.timeOffset,
       position: sample.positionRadians + this.positionOffset,

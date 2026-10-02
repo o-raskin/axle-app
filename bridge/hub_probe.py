@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from contextlib import suppress
 from pathlib import Path
 from typing import Any
 
@@ -103,13 +104,17 @@ def build_report(hub: TechnicMoveHub, port_map: dict[str, Any]) -> str:
 async def scan_hub(name: str = DEFAULT_HUB_NAME, address: str | None = None) -> tuple[dict[str, Any], str]:
     """Connect to a hub, inspect it, and return the normalized port map and report."""
     hub = TechnicMoveHub(hub_name=name, hub_address=address)
-    await hub.connect()
     try:
+        await hub.connect()
         await hub.inspect_ports()
         port_map = normalize_port_map(hub)
-        return port_map, build_report(hub, port_map)
-    finally:
-        await hub.disconnect()
+        report = build_report(hub, port_map)
+    except BaseException:
+        with suppress(Exception):
+            await hub.disconnect()
+        raise
+    await hub.disconnect()
+    return port_map, report
 
 
 def save_probe_outputs(

@@ -18,8 +18,12 @@ SDL_MODULES = ("audio", "controller", "sdl2")
 
 def executable_name(name: str, host: str = sys.platform) -> str:
     """Choose the native executable suffix without accepting path traversal."""
-    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]*", name) or name.endswith(".exe"):
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]*", name) or name.lower().endswith(".exe"):
         raise ValueError("--name must be a filename without an .exe suffix")
+    if host == "win32" and (
+        name.endswith(".") or re.fullmatch(r"(?:CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(?:\..*)?", name, re.IGNORECASE)
+    ):
+        raise ValueError("--name cannot be a reserved Windows filename")
     return f"{name}.exe" if host == "win32" else name
 
 

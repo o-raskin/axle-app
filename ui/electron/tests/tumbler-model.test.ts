@@ -8,7 +8,7 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { MeshoptDecoder } from "meshoptimizer/decoder";
 import { bindTumblerModel, steeringYawForCommand } from "../src/renderer/src/vehicle/tumblerModel.ts";
-import { CAMERA_SHOTS } from "../src/renderer/src/vehicle/tumblerCamera.ts";
+import { CAMERA_SHOTS, CAMERA_FRAMING_MIN_ASPECT } from "../src/renderer/src/vehicle/tumblerCamera.ts";
 import { extractTumblerSourceBundle, packTumblerSourceBundle, readTumblerSourceBundle } from "../scripts/tumbler-source-bundle.mjs";
 
 const electronRoot = process.cwd();
@@ -381,6 +381,37 @@ test("three internal optical couplers have isolated green and clear surfaces for
   assert.ok(!fixed.some((material) => /^LDraw_35:/.test(material.name)), "Translucent green optical surfaces cannot remain baked into the fixed body");
 });
 
+test("cinematic whole-car shots keep the decoded model framed across desktop and narrow windows", () => {
+  const center = new THREE.Box3().setFromObject(scene).getCenter(new THREE.Vector3());
+  const point = new THREE.Vector3();
+  const cropped = [];
+  for (const name of ["overview", "drive", "boost", "combined"] as const) {
+    const shot = CAMERA_SHOTS[name];
+    const target = center.clone();
+    target.y += shot.targetYOffset ?? 0;
+    for (const aspect of [1.0, 1.3, 2.4]) {
+      const camera = new THREE.PerspectiveCamera(38, aspect, 0.1, 80);
+      const offset = new THREE.Vector3().fromArray(shot.offset).multiplyScalar(Math.max(1, CAMERA_FRAMING_MIN_ASPECT / aspect));
+      camera.position.copy(target).add(offset);
+      camera.lookAt(target);
+      camera.updateMatrixWorld(true);
+      const projection = new THREE.Matrix4().multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+      let extent = 0;
+      for (const mesh of meshes(scene)) {
+        const positions = mesh.geometry.getAttribute("position");
+        const transform = projection.clone().multiply(mesh.matrixWorld);
+        for (let vertex = 0; vertex < positions.count; vertex += 1) {
+          point.fromBufferAttribute(positions, vertex).applyMatrix4(transform);
+          extent = Math.max(extent, Math.abs(point.x), Math.abs(point.y));
+          assert.ok(point.z > -1 && point.z < 1, "Camera clipping planes must retain the car");
+        }
+      }
+      if (extent >= 0.95) cropped.push({ view: name, aspect, extent });
+    }
+  }
+  assert.deepEqual(cropped, [], "Whole-car shots must retain a margin around the actual decoded car");
+});
+
 test("the reverse camera exposes green surfaces in all three optical assemblies while steering", () => {
   const lamps = reverseLampNames.map(node);
   const target = lamps.reduce((sum, lamp) => sum.add(new THREE.Box3().setFromObject(lamp).getCenter(new THREE.Vector3())),
@@ -392,7 +423,7 @@ test("the reverse camera exposes green surfaces in all three optical assemblies 
   // Cached bounds keep these 192 surface probes inexpensive on the full model.
   for (const mesh of meshes(scene)) mesh.geometry.computeBoundingBox();
   try {
-    for (const steeringBias of [0, 0.3, -1, 1]) {
+    for (const aspect of [1.0, 1.3, 2.4]) for (const steeringBias of [0, 0.3, -1, 1]) {
       for (const pivot of steering) pivot.rotation.y = steeringYawForCommand(steeringBias);
       scene.updateMatrixWorld(true);
       const orbit = new THREE.Spherical().setFromVector3(new THREE.Vector3().fromArray(CAMERA_SHOTS.reverse.offset));
@@ -400,8 +431,9 @@ test("the reverse camera exposes green surfaces in all three optical assemblies 
       const turn = Math.abs(steeringBias);
       orbit.theta += Math.min(turn, 0.3) * 0.2;
       orbit.radius *= 1 + turn * 0.08 + 0.03;
+      orbit.radius *= Math.max(1, CAMERA_FRAMING_MIN_ASPECT / aspect);
       const camera = new THREE.Vector3().setFromSpherical(orbit).add(target);
-      const framing = new THREE.PerspectiveCamera(38, 1.3, 0.1, 80);
+      const framing = new THREE.PerspectiveCamera(38, aspect, 0.1, 80);
       framing.position.copy(camera);
       framing.lookAt(target);
       framing.updateMatrixWorld(true);
@@ -411,7 +443,7 @@ test("the reverse camera exposes green surfaces in all three optical assemblies 
       let minimumDepth = Infinity;
       let maximumDepth = -Infinity;
       // Check decoded surface vertices, rather than oversized box corners, at
-      // the viewer's narrow-aspect framing floor. Keep the closer shot uncropped.
+      // both desktop and narrow-window framing. Keep the closer shot uncropped.
       for (const mesh of meshes(scene)) {
         const positions = mesh.geometry.getAttribute("position");
         const transform = projection.clone().multiply(mesh.matrixWorld);
@@ -422,7 +454,7 @@ test("the reverse camera exposes green surfaces in all three optical assemblies 
           maximumDepth = Math.max(maximumDepth, point.z);
         }
       }
-      assert.ok(frameExtent < 0.95, `The reverse camera crops the actual car at ${steeringBias * 100}% steering`);
+      assert.ok(frameExtent < 0.95, `The reverse camera crops the actual car at ${steeringBias * 100}% steering, aspect ${aspect}: extent ${frameExtent}`);
       assert.ok(minimumDepth > -1 && maximumDepth < 1, "The reverse view must retain the whole car inside its clipping planes");
       for (const lamp of lamps) {
         const green = meshes(lamp).filter((mesh) =>

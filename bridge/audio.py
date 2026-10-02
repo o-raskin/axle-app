@@ -59,37 +59,58 @@ class MacAfplayBeepPlayer:
             self._restore_locked()
             if self.device_id is not None:
                 self._previous_device_id = coreaudio_default_output_device()
-                coreaudio_set_default_output_device(self.device_id)
-            self._process = subprocess.Popen(
-                ["/usr/bin/afplay", str(self.sound_path)],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
-            Thread(target=self._wait_and_restore, daemon=True).start()
+                if self._previous_device_id is None:
+                    raise RuntimeError("Could not determine the system audio output before playing a controller beep")
+                if not coreaudio_set_default_output_device(self.device_id):
+                    self._restore_locked()
+                    raise RuntimeError("Could not select the controller audio output")
+            try:
+                process = subprocess.Popen(
+                    ["/usr/bin/afplay", str(self.sound_path)],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+            except BaseException:
+                self._restore_locked()
+                raise
+            self._process = process
+            try:
+                Thread(target=self._wait_and_restore, args=(process,), daemon=True).start()
+            except BaseException:
+                try:
+                    process.terminate()
+                finally:
+                    self._restore_locked()
+                raise
             return self
 
     def stop(self) -> None:
         """Stop any active beep and restore the previous output device."""
         with self._lock:
-            if self._process is not None and self._process.poll() is None:
-                self._process.terminate()
-            self._restore_locked()
+            try:
+                if self._process is not None and self._process.poll() is None:
+                    self._process.terminate()
+            finally:
+                self._restore_locked()
 
     def get_busy(self) -> bool:
         """Return whether the launched afplay process is still active."""
         with self._lock:
             return self._process is not None and self._process.poll() is None
 
-    def _wait_and_restore(self) -> None:
-        process = self._process
-        if process is not None:
+    def _wait_and_restore(self, process: subprocess.Popen[Any]) -> None:
+        try:
             process.wait()
-        with self._lock:
-            if self._process is process:
-                self._restore_locked()
+        finally:
+            with self._lock:
+                if self._process is process:
+                    self._restore_locked()
 
     def _restore_locked(self) -> None:
-        if self._previous_device_id is not None:
+        # A user may select another output while a beep is playing. Only undo
+        # our own temporary selection; do not overwrite that later choice.
+        current_device = coreaudio_default_output_device() if self._previous_device_id is not None else None
+        if self._previous_device_id is not None and current_device in {None, self.device_id}:
             coreaudio_set_default_output_device(self._previous_device_id)
         self._previous_device_id = None
         self._process = None

@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import math
 import os
 import sys
+from contextlib import suppress
 from typing import Any
 
 from ..platforms import steamdeck_platform
@@ -20,13 +22,15 @@ SDL_CONTROLLER_BUTTON_COUNT = 21
 
 def axis_to_percent(value: float, limit: int, deadzone: float) -> int:
     """Scale a joystick axis to a signed integer with deadzone protection."""
-    if abs(value) < deadzone:
+    if not math.isfinite(value) or abs(value) < deadzone:
         return 0
     return int(max(-1.0, min(1.0, value)) * limit)
 
 
 def trigger_amount(value: float, rest_negative: bool, deadzone: float) -> float:
     """Normalize a trigger axis to 0..1."""
+    if not math.isfinite(value):
+        return 0.0
     amount = (value + 1.0) / 2.0 if rest_negative else value
     if amount < deadzone:
         return 0.0
@@ -70,7 +74,7 @@ def read_throttle(joystick: Any, pad: GamepadProfile, max_drive: int, speed_mode
 
 def button_held(joystick: Any, index: int) -> bool:
     """Return whether a button index exists and is currently pressed."""
-    return index < joystick.get_numbuttons() and bool(joystick.get_button(index))
+    return 0 <= index < joystick.get_numbuttons() and bool(joystick.get_button(index))
 
 
 def gamepad_name_is_dualsense(name: str) -> bool:
@@ -98,6 +102,8 @@ class SdlGameControllerJoystick:
     def get_axis(self, index: int) -> float:
         """Return axes as -1..1, including triggers as -1 at rest for existing profiles."""
         raw = float(self._controller.get_axis(index))
+        if not math.isfinite(raw):
+            return -1.0 if index in SDL_CONTROLLER_TRIGGER_AXES else 0.0
         if index in SDL_CONTROLLER_TRIGGER_AXES:
             return max(-1.0, min(1.0, (raw / SDL_CONTROLLER_AXIS_MAX * 2.0) - 1.0))
         return max(-1.0, min(1.0, raw / SDL_CONTROLLER_AXIS_MAX))
@@ -227,7 +233,6 @@ def init_sdl_game_controller(profile: GamepadProfile | None, pygame_mod: Any) ->
     except Exception:
         return None, []
 
-    fallback: tuple[int, str] | None = None
     for index in range(count):
         try:
             name = str(sdl2_controller.name_forindex(index) or f"SDL controller {index}")
@@ -242,19 +247,15 @@ def init_sdl_game_controller(profile: GamepadProfile | None, pygame_mod: Any) ->
         if not is_controller:
             continue
 
-        if fallback is None:
-            fallback = (index, name)
-        if profile is not None and profile.matches_device_name(name):
-            controller = sdl2_controller.Controller(index)
+        matches = profile.matches_device_name(name) if profile is not None else gamepad_name_is_dualsense(name)
+        if matches:
+            try:
+                controller = sdl2_controller.Controller(index)
+            except Exception:
+                # A controller can disappear between enumeration and opening.
+                # Continue trying the other detected candidates in this scan.
+                continue
             return SdlGameControllerJoystick(controller, name, index), names
-        if profile is None and gamepad_name_is_dualsense(name):
-            controller = sdl2_controller.Controller(index)
-            return SdlGameControllerJoystick(controller, name, index), names
-
-    if profile is not None and not profile.name_hints and fallback is not None:
-        index, name = fallback
-        controller = sdl2_controller.Controller(index)
-        return SdlGameControllerJoystick(controller, name, index), names
 
     return None, names
 
@@ -265,7 +266,15 @@ def init_gamepad(profile: GamepadProfile | None = None) -> tuple[Any, Any]:
 
     import pygame  # noqa: PLC0415  (kept out of import time: pygame and bleak fight over COM apartment)
 
-    refresh_joystick_subsystem(pygame)
+    try:
+        refresh_joystick_subsystem(pygame)
+        return _open_gamepad(pygame, profile)
+    except BaseException:
+        pygame.quit()
+        raise
+
+
+def _open_gamepad(pygame: Any, profile: GamepadProfile | None) -> tuple[Any, Any]:
     found_names = []
 
     controller, controller_names = init_sdl_game_controller(profile, pygame)
@@ -275,26 +284,27 @@ def init_gamepad(profile: GamepadProfile | None = None) -> tuple[Any, Any]:
 
     joystick_count = pygame.joystick.get_count()
     if joystick_count == 0 and not found_names:
-        pygame.quit()
         raise RuntimeError("No gamepad detected")
 
-    fallback: Any | None = None
     for index in range(joystick_count):
-        joystick = pygame.joystick.Joystick(index)
-        joystick.init()
-        name = joystick.get_name()
+        joystick = None
+        try:
+            joystick = pygame.joystick.Joystick(index)
+            joystick.init()
+            name = joystick.get_name()
+        except Exception:
+            if joystick is not None:
+                with suppress(Exception):
+                    joystick.quit()
+            continue
         found_names.append(name)
-        if fallback is None:
-            fallback = joystick
         if profile is not None and profile.matches_device_name(name):
             return pygame, joystick
         if profile is None and gamepad_name_is_dualsense(name):
             return pygame, joystick
+        with suppress(Exception):
+            joystick.quit()
 
-    if profile is not None and not profile.name_hints and fallback is not None:
-        return pygame, fallback
-
-    pygame.quit()
     found = ", ".join(found_names) or "unknown controller"
     target = profile.name if profile is not None else "DualSense"
     raise RuntimeError(f"{target} controller not found (detected: {found})")
@@ -337,9 +347,17 @@ def gamepad_diagnostics() -> str:
         count = pygame.joystick.get_count()
         lines.append(f"joystick_count={count}")
         for index in range(count):
-            joystick = pygame.joystick.Joystick(index)
-            joystick.init()
-            lines.extend(gamepad_diagnostic_lines(joystick, index))
+            joystick = None
+            try:
+                joystick = pygame.joystick.Joystick(index)
+                joystick.init()
+                lines.extend(gamepad_diagnostic_lines(joystick, index))
+            except Exception as exc:
+                lines.append(f"joystick[{index}].error={type(exc).__name__}:{exc}")
+            finally:
+                if joystick is not None:
+                    with suppress(Exception):
+                        joystick.quit()
     finally:
         pygame.quit()
 
@@ -449,17 +467,17 @@ def snapshot(joystick: Any) -> dict[str, Any]:
 
 def run_probe(pygame: Any, joystick: Any) -> None:
     """Print changed joystick axes/buttons until interrupted."""
-    print(f"Gamepad: {joystick.get_name()}")
-    print(f"axes={joystick.get_numaxes()} buttons={joystick.get_numbuttons()} hats={joystick.get_numhats()}")
-    print("Press buttons / move sticks. Ctrl+C to stop.\n")
-
-    prev = snapshot(joystick)
-    print(f"start axes={prev['axes']}")
-    print(f"start buttons={prev['buttons']}")
-    if prev["hats"]:
-        print(f"start hats={prev['hats']}")
-
     try:
+        print(f"Gamepad: {joystick.get_name()}")
+        print(f"axes={joystick.get_numaxes()} buttons={joystick.get_numbuttons()} hats={joystick.get_numhats()}")
+        print("Press buttons / move sticks. Ctrl+C to stop.\n")
+
+        prev = snapshot(joystick)
+        print(f"start axes={prev['axes']}")
+        print(f"start buttons={prev['buttons']}")
+        if prev["hats"]:
+            print(f"start hats={prev['hats']}")
+
         while True:
             pygame.event.pump()
             current = snapshot(joystick)

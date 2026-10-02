@@ -33,7 +33,7 @@ from .session import (
     wait_for_drive_hardware,
     wait_for_gamepad,
 )
-from .settings import AXIS_REPORT_STEP, SESSION_EXIT
+from .settings import AXIS_REPORT_STEP, DASHBOARD_LOG_LIMIT, SESSION_EXIT
 from .transport import DEFAULT_HUB_NAME
 
 PROTOCOL_NAME = "lego-technic-bridge"
@@ -212,6 +212,8 @@ class ProtocolLiveConsole:
         """Emit one or more log lines."""
         for line in str(message).splitlines() or [""]:
             self.logs.append(line)
+            if len(self.logs) > DASHBOARD_LOG_LIMIT:
+                del self.logs[:-DASHBOARD_LOG_LIMIT]
             self.emitter.emit("log", level="info", message=line)
 
     def stop(self) -> None:
@@ -392,26 +394,26 @@ async def run_protocol_gamepad_probe(out: JsonLineEmitter, gamepad_name: str) ->
     setup = ProtocolSetupConsole(out)
     pad_candidates = gamepad_profile_candidates(gamepad_name)
     pygame_mod, joystick, pad = await wait_for_gamepad(setup, pad_candidates)
-    setup.show(
-        "Controller ready",
-        f"Controller detected: {joystick.get_name()} ({pad.name})",
-        startup_steps(dualsense=True, hub=False, ready=True),
-    )
-    out.emit(
-        "command/result",
-        command="probeGamepad",
-        ok=True,
-        payload={
-            "name": joystick.get_name(),
-            "profile": pad.profile_id,
-            "axes": joystick.get_numaxes(),
-            "buttons": joystick.get_numbuttons(),
-            "hats": joystick.get_numhats(),
-        },
-    )
-    previous = snapshot(joystick)
-    out.emit("telemetry", telemetry={"kind": "gamepadProbe", "snapshot": previous, "changes": []})
     try:
+        setup.show(
+            "Controller ready",
+            f"Controller detected: {joystick.get_name()} ({pad.name})",
+            startup_steps(dualsense=True, hub=False, ready=True),
+        )
+        out.emit(
+            "command/result",
+            command="probeGamepad",
+            ok=True,
+            payload={
+                "name": joystick.get_name(),
+                "profile": pad.profile_id,
+                "axes": joystick.get_numaxes(),
+                "buttons": joystick.get_numbuttons(),
+                "hats": joystick.get_numhats(),
+            },
+        )
+        previous = snapshot(joystick)
+        out.emit("telemetry", telemetry={"kind": "gamepadProbe", "snapshot": previous, "changes": []})
         while True:
             pygame_mod.event.pump()
             current = snapshot(joystick)

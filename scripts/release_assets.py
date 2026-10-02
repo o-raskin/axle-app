@@ -13,8 +13,9 @@ import subprocess
 import tarfile
 import tempfile
 import zipfile
+from contextlib import contextmanager
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 
 ROOT = Path(__file__).resolve().parents[1]
 TARGETS = {
@@ -83,9 +84,25 @@ def describe(path: Path) -> dict[str, Any]:
     return {"name": path.name, "size": path.stat().st_size, "sha256": digest.hexdigest()}
 
 
+@contextmanager
+def artifact_output(path: Path) -> Iterator[Path]:
+    """Replace outputs atomically, without writing through links or partial files."""
+    if path.is_symlink() or (path.exists() and not path.is_file()):
+        raise ValueError(f"Unsafe artifact output: {path}")
+    descriptor, name = tempfile.mkstemp(prefix=f".{path.name}-", dir=path.parent)
+    os.close(descriptor)
+    temporary = Path(name)
+    try:
+        yield temporary
+        os.replace(temporary, path)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
 def write_json(path: Path, value: Any) -> None:
     """Write stable, human-readable release metadata."""
-    path.write_text(json.dumps(value, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    with artifact_output(path) as temporary:
+        temporary.write_text(json.dumps(value, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
 def stage(root: Path, output: Path, version: str, commit: str, target: str) -> None:
@@ -98,14 +115,17 @@ def stage(root: Path, output: Path, version: str, commit: str, target: str) -> N
     describe(binary)
     archive_path = output / names[0]
     if target.startswith("windows-"):
-        with zipfile.ZipFile(archive_path, "w", zipfile.ZIP_DEFLATED) as archive:
+        with (
+            artifact_output(archive_path) as temporary,
+            zipfile.ZipFile(temporary, "w", zipfile.ZIP_DEFLATED) as archive,
+        ):
             archive.write(binary, binary_name)
             archive.write(root / "LICENSE", "LICENSE")
         with zipfile.ZipFile(archive_path) as archive:
             if archive.testzip() is not None or archive.read(binary_name) != binary.read_bytes():
                 raise ValueError("Terminal ZIP verification failed")
     else:
-        with tarfile.open(archive_path, "w:gz") as archive:
+        with artifact_output(archive_path) as temporary, tarfile.open(temporary, "w:gz") as archive:
             info = archive.gettarinfo(str(binary), arcname=binary_name)
             info.mode = EXECUTABLE_MODE
             info.uid = info.gid = 0
@@ -124,7 +144,8 @@ def stage(root: Path, output: Path, version: str, commit: str, target: str) -> N
             continue
         source = root / "ui" / "electron" / "release" / name
         describe(source)
-        shutil.copy2(source, output / name)
+        with artifact_output(output / name) as temporary:
+            shutil.copy2(source, temporary)
     write_json(
         output / f"manifest-{target}.json",
         {
@@ -146,12 +167,18 @@ def verify(directory: Path, version: str, commit: str) -> dict[str, Any]:
         manifest_path = directory / f"manifest-{target}.json"
         describe(manifest_path)
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        if not isinstance(manifest, dict) or type(manifest.get("schema")) is not int:
+            raise ValueError(f"Invalid release manifest: {manifest_path.name}")
         identity = {key: manifest.get(key) for key in ("schema", "version", "commit", "target")}
         if identity != {"schema": 1, "version": version, "commit": commit, "target": target}:
             raise ValueError(f"Wrong release identity: {manifest_path.name}")
         expected = asset_names(version, target)
         entries = manifest.get("assets", [])
-        if not isinstance(entries, list) or [entry.get("name") for entry in entries] != expected:
+        if (
+            not isinstance(entries, list)
+            or not all(isinstance(entry, dict) and type(entry.get("size")) is int for entry in entries)
+            or [entry.get("name") for entry in entries] != expected
+        ):
             raise ValueError(f"Wrong artifact inventory: {target}")
         for entry in entries:
             if describe(directory / entry["name"]) != entry:
@@ -174,15 +201,26 @@ def verify(directory: Path, version: str, commit: str) -> dict[str, Any]:
     }
     write_json(directory / "release-manifest.json", result)
     checksums = [*result["assets"], describe(directory / "release-manifest.json")]
-    (directory / "SHA256SUMS").write_text(
-        "".join(f"{item['sha256']}  {item['name']}\n" for item in checksums), encoding="utf-8"
-    )
+    with artifact_output(directory / "SHA256SUMS") as temporary:
+        temporary.write_text("".join(f"{item['sha256']}  {item['name']}\n" for item in checksums), encoding="utf-8")
     return result
 
 
 def gh(*arguments: str) -> str:
     """Run GitHub CLI with checked exit status and argument-safe invocation."""
     return subprocess.run(["gh", *arguments], check=True, capture_output=True, text=True).stdout
+
+
+def verify_remote_assets(directory: Path, tag: str, names: list[str]) -> None:
+    """Verify uploaded bytes, including same-size corruption, before trusting a release."""
+    with tempfile.TemporaryDirectory(prefix="axle-release-readback-") as temporary:
+        arguments = ["release", "download", tag, "--dir", temporary]
+        for name in names:
+            arguments.extend(("--pattern", name))
+        gh(*arguments)
+        for name in names:
+            if describe(Path(temporary) / name) != describe(directory / name):
+                raise ValueError(f"Remote artifact checksum or size mismatch: {name}")
 
 
 def publish(directory: Path, version: str, commit: str) -> None:
@@ -204,11 +242,9 @@ def publish(directory: Path, version: str, commit: str) -> None:
             raise ValueError("Existing release belongs to a different commit; refusing to overwrite")
         remote_names = {asset["name"] for asset in existing["assets"]}
         if not existing["isDraft"]:
-            with tempfile.TemporaryDirectory() as temporary:
-                gh("release", "download", tag, "--pattern", "release-manifest.json", "--dir", temporary)
-                remote = json.loads((Path(temporary) / "release-manifest.json").read_text(encoding="utf-8"))
-            if remote != manifest or remote_names != set(names):
+            if remote_names != set(names) or len(existing["assets"]) != len(names):
                 raise ValueError("Published release differs from this build; published assets are immutable")
+            verify_remote_assets(directory, tag, names)
             resolved = gh("api", f"repos/{repository}/commits/{tag}", "--jq", ".sha").strip()
             if resolved != commit:
                 raise ValueError("Published tag points to a different commit")
@@ -234,8 +270,14 @@ def publish(directory: Path, version: str, commit: str) -> None:
     uploaded = json.loads(gh("release", "view", tag, "--json", RELEASE_FIELDS))
     expected_sizes = {name: (directory / name).stat().st_size for name in names}
     actual_sizes = {asset["name"]: asset["size"] for asset in uploaded["assets"] if asset["state"] == "uploaded"}
-    if not uploaded["isDraft"] or actual_sizes != expected_sizes:
+    if (
+        not uploaded["isDraft"]
+        or uploaded["targetCommitish"] != commit
+        or len(uploaded["assets"]) != len(names)
+        or actual_sizes != expected_sizes
+    ):
         raise ValueError("Draft upload is incomplete; leaving it unpublished")
+    verify_remote_assets(directory, tag, names)
     notes = (
         f"Commit: `{commit}`\n\n"
         "Terminal: macOS arm64/x64, Windows x64, Linux x64.\n\n"

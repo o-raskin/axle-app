@@ -78,8 +78,10 @@ def verify_command(stdout: str, command: str) -> dict[str, Any]:
         if (
             not isinstance(event, dict)
             or event.get("protocol") != PROTOCOL_NAME
+            or type(event.get("version")) is not int
             or event.get("version") != PROTOCOL_VERSION
-            or not event.get("timestamp")
+            or not isinstance(event.get("timestamp"), str)
+            or not event["timestamp"]
         ):
             raise ValueError(f"Invalid protocol envelope: {event!r}")
         if event.get("type") == "error":
@@ -88,9 +90,16 @@ def verify_command(stdout: str, command: str) -> dict[str, Any]:
     if len(results) != 1 or results[0].get("command") != command or results[0].get("ok") is not True:
         raise ValueError(f"Missing successful {command} command result")
     final_event = events[-1]
-    if final_event.get("type") != "exit" or final_event.get("exitCode") != 0 or final_event.get("reason") != "complete":
+    if (
+        final_event.get("type") != "exit"
+        or type(final_event.get("exitCode")) is not int
+        or final_event.get("exitCode") != 0
+        or final_event.get("reason") != "complete"
+    ):
         raise ValueError(f"Frozen bridge did not complete the {command} request cleanly")
     payload: dict[str, Any] = results[0].get("payload", {})
+    if not isinstance(payload, dict):
+        raise ValueError(f"Invalid {command} command payload")
     return payload
 
 
@@ -101,13 +110,19 @@ def verify_catalog(stdout: str, expected: dict[str, dict[str, str]]) -> None:
         choices = payload.get(category, [])
         if (
             not isinstance(choices, list)
-            or not all(isinstance(choice, dict) for choice in choices)
+            or not all(isinstance(choice, dict) and isinstance(choice.get("id"), str) for choice in choices)
             or len(choices) != len(profiles)
             or {choice.get("id"): choice.get("name") for choice in choices} != profiles
         ):
             raise ValueError(f"Frozen {category} catalog differs from source profiles")
     defaults = payload.get("defaults", {})
-    if defaults.get("model") not in expected["models"] or defaults.get("gamepad") not in expected["gamepads"]:
+    if (
+        not isinstance(defaults, dict)
+        or not isinstance(defaults.get("model"), str)
+        or not isinstance(defaults.get("gamepad"), str)
+        or defaults["model"] not in expected["models"]
+        or defaults["gamepad"] not in expected["gamepads"]
+    ):
         raise ValueError("Frozen catalog defaults refer to unavailable profiles")
 
 
@@ -150,7 +165,7 @@ def verify_binary(binary: Path, root: Path = ROOT) -> None:
                 verify_catalog(result.stdout, expected_profiles(root))
             else:
                 report = verify_command(result.stdout, "gamepadDevices").get("report", "")
-                if "controller_count=" not in report or "joystick_count=" not in report:
+                if not isinstance(report, str) or "controller_count=" not in report or "joystick_count=" not in report:
                     raise ValueError("Frozen SDL controller and joystick modules did not initialize")
 
 

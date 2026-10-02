@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass
 from typing import Any
 
 from .. import paths
+from ..profile_validation import integer, integer_mapping, load_profile, number, object_mapping
 
 CONFIG_DIR = paths.CONFIG_DIR
 DEFAULT_REQUIRED_PORT_ROLES = ("steering", "drive_left", "drive_right", "play_vm")
@@ -28,19 +28,14 @@ def _need(mapping: dict[str, Any], key: str, owner: str, what: str) -> Any:
 
 
 def _load(kind: str, name: str) -> dict[str, Any]:
-    path = CONFIG_DIR / kind / f"{name}.json"
-    if not path.exists():
-        available = sorted(p.stem for p in (CONFIG_DIR / kind).glob("*.json"))
-        raise RuntimeError(f"No {kind} profile '{name}'. Available: {', '.join(available) or 'none'}")
-    loaded: dict[str, Any] = json.loads(path.read_text(encoding="utf-8"))
-    return loaded
+    return load_profile(CONFIG_DIR, kind, name)
 
 
 def available_model_choices() -> list[ModelProfileChoice]:
     """Return all model profiles available under config/models."""
     choices = []
     for path in sorted((CONFIG_DIR / "models").glob("*.json")):
-        data: dict[str, Any] = json.loads(path.read_text(encoding="utf-8"))
+        data = _load("models", path.stem)
         choices.append(ModelProfileChoice(profile_id=path.stem, name=str(data.get("name", path.stem))))
     if not choices:
         raise RuntimeError(f"No model profiles found in {CONFIG_DIR / 'models'}")
@@ -59,13 +54,21 @@ class ModelProfile:
         """Read one model profile; missing keys raise here rather than at drive time."""
         self.profile_id = name
         self.name: str = data["name"]
-        self.program_id: int = data["program_id"]
-        self._control: dict[str, int] = data["control"]
-        self._control2: dict[str, int] = data["control2"]
-        self._pace: dict[str, float] = data["calibration_pace_s"]
-        self._boost: dict[str, float] | None = data.get("boost")
-        self.max_drive: int = data["limits"]["drive"]
-        self.max_steering: int = data["limits"]["steering"]
+        self.program_id = integer(data["program_id"], self.name, "program_id", maximum=255)
+        self._control = integer_mapping(data["control"], self.name, "control", maximum=255)
+        self._control2 = integer_mapping(data["control2"], self.name, "control2", maximum=255)
+        self._pace = {
+            key: number(value, self.name, f"calibration_pace_s.{key}")
+            for key, value in object_mapping(data["calibration_pace_s"], self.name, "calibration_pace_s").items()
+        }
+        self._boost: dict[str, float] | None = None
+        if data.get("boost") is not None:
+            self._boost = {
+                key: number(value, self.name, f"boost.{key}")
+                for key, value in object_mapping(data["boost"], self.name, "boost").items()
+            }
+        self.max_drive = integer(data["limits"]["drive"], self.name, "limits.drive", maximum=100)
+        self.max_steering = integer(data["limits"]["steering"], self.name, "limits.steering", maximum=100)
         self.required_port_roles: tuple[str, ...] = tuple(data.get("required_ports", DEFAULT_REQUIRED_PORT_ROLES))
 
     @classmethod

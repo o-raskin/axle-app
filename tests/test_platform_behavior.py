@@ -4,6 +4,7 @@ import asyncio
 import os
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, cast
 
 from bridge import audio, session
@@ -238,6 +239,8 @@ class FakePygameForEvents:
 class FakePygameHandle:
     def __init__(self) -> None:
         self.quit_count = 0
+        self.event = SimpleNamespace(pump=lambda: None, get=list)
+        self.joystick = SimpleNamespace(get_count=lambda: 1)
 
     def quit(self) -> None:
         self.quit_count += 1
@@ -250,6 +253,9 @@ class FakeNamedJoystick:
     def get_name(self) -> str:
         return self.name
 
+    def get_init(self) -> bool:
+        return True
+
 
 class FakeDriveHub:
     events: list[str] = []
@@ -259,6 +265,7 @@ class FakeDriveHub:
         self.hub_name = hub_name
         self.hub_address = hub_address
         self.disconnect_count = 0
+        self.is_connected = True
         FakeDriveHub.instances.append(self)
 
     async def connect(self) -> None:

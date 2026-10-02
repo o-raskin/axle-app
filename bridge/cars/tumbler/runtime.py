@@ -10,6 +10,7 @@ from ...gamepads.input import axis_to_percent, button_held, read_drive_state, re
 from ...gamepads.profile_loader import GamepadProfile
 from ...settings import (
     BOOST_FEEDBACK_DELAY_S,
+    BOOST_UNAVAILABLE_RUMBLE_MS,
     CRASH_LOCKOUT_S,
     DEFAULT_SPEED_MODE,
     SPEED_MODE_RATIOS,
@@ -169,7 +170,7 @@ class TumblerDriveRuntime:
         crash_active = self.crash_lockout.active(now)
         brake = buttons.brake and not crash_active
 
-        await self._update_speed_mode(joystick, buttons, crash_active, now, log)
+        previous_speed_mode = self.speed_mode
         motion = self._read_motion(joystick, brake, crash_active)
 
         crash_active, motion = self._update_crash_lockout(
@@ -180,6 +181,12 @@ class TumblerDriveRuntime:
             now,
             log=log,
         )
+
+        # Hub status describes motion that happened before this input frame.
+        # Apply a newly detected crash before accepting any button actions.
+        await self._update_speed_mode(joystick, buttons, crash_active, now, log)
+        if not crash_active and self.speed_mode != previous_speed_mode:
+            motion = self._read_motion(joystick, motion.brake, crash_active=False)
 
         self._update_reverse_state(motion.throttle, now)
         self._update_boost(joystick, buttons, motion.brake, crash_active, now, log=log)
@@ -338,6 +345,9 @@ class TumblerDriveRuntime:
             else:
                 log(f"boost not ready ({self.boost_ready_at - now:.1f}s left)")
             self.boost_unavailable_feedback.trigger(joystick, now)
+            self.drive_rumble_paused_until = max(
+                self.drive_rumble_paused_until, now + BOOST_UNAVAILABLE_RUMBLE_MS / 1000
+            )
         self.boost_prev = buttons.boost
         if brake or crash_active:
             self.boost_until = 0.0

@@ -240,6 +240,23 @@ function positionDistance(first, second) {
 async function cameraSettled() {
   await activePage.waitForFunction(() => document.querySelector(".tumbler-viewer canvas")?.getAttribute("data-camera-moving") === "false");
 }
+async function openCameraMenu() {
+  const menu = activePage.locator(".tumbler-viewer__toolbar");
+  if (await menu.getAttribute("open") === null) await menu.locator("summary").click();
+  return menu;
+}
+async function selectCameraView(name) {
+  const menu = await openCameraMenu();
+  await menu.getByRole("button", { name, exact: true }).click();
+  assert.equal(await menu.getAttribute("open"), null, "Choosing a view must collapse the camera menu");
+}
+async function setCameraFollow(enabled) {
+  const menu = await openCameraMenu();
+  await menu.getByLabel("Follow active part", { exact: true }).setChecked(enabled);
+  await activePage.keyboard.press("Escape");
+  assert.equal(await menu.getByLabel("Follow active part", { exact: true }).isChecked(), enabled,
+    "Closing the menu must retain the chosen automatic-camera preference");
+}
 
 async function run() {
   await fs.access(renderer).catch(() => { throw new Error("Built renderer is missing. Run npm run build in ui/electron first."); });
@@ -256,17 +273,27 @@ async function run() {
       [{ modelId: "tumbler", gamepadId: "auto", hubName: "Technic Move", hubAddress: "" }]);
     assert.equal(calls.filter((call) => call.method === "discoverHardware").length, 0);
     assert.equal(await page.getByRole("button", { name: /connect vehicle|start driving|start engine|stop searching|stop driving/i }).count(), 0);
-    assert.equal(await page.getByLabel("Vehicle model", { exact: true }).isEnabled(), true);
-    assert.equal(await page.getByLabel("Vehicle model", { exact: true }).locator("option").count(), 1);
+    assert.equal(await page.getByLabel("Vehicle model", { exact: true }).count(), 0);
+    const dialog = await settingsDialog();
+    const model = dialog.getByLabel("Vehicle model", { exact: true });
+    assert.equal(await model.isEnabled(), true);
+    assert.equal(await model.locator("option").count(), 1);
+    await model.selectOption("tumbler");
+    await page.keyboard.press("Escape");
+    assert.equal(await page.getByLabel("Vehicle model", { exact: true }).count(), 0);
     await noHorizontalOverflow();
     await screenshot("01-automatic-startup");
   });
   await checkpoint("Live readiness and lost devices require fresh feedback", async () => {
     await fixture("setup");
     assert.equal(await page.locator(".tumbler-viewer").getAttribute("data-live"), "false");
+    assert.equal(await page.locator(".tumbler-viewer__diagnostics").count(), 0,
+      "Repeated connection and wheel-feedback notes must be absent from the normal preview");
+    const footerBounds = await page.locator(".vehicle-card__bottom").boundingBox();
+    assert.ok(footerBounds && footerBounds.height <= 104, "The vehicle footer must stay compact while retaining touch-sized controls");
     await streamTumblerTelemetry({ throttle: 30, measured_wheel_rate: 4 });
     await page.waitForFunction(() => document.querySelector(".tumbler-viewer")?.getAttribute("data-live") === "true");
-    assert.equal(await page.getByLabel("Vehicle model", { exact: true }).isEnabled(), true);
+    assert.equal(await page.getByLabel("Vehicle model", { exact: true }).count(), 0);
     await fixture("stopTelemetry");
     await fixture("setup", { controller: false, vehicle: true, ready: false });
     await page.waitForFunction(() => document.querySelector(".tumbler-viewer")?.getAttribute("data-live") === "false");
@@ -296,7 +323,7 @@ async function run() {
   });
   await checkpoint("Renderer reload adopts an existing live session", async () => {
     page = await launch("reload-live-slow-profiles");
-    await visible(page.getByLabel("Vehicle model", { exact: true }));
+    await visible(page.locator(".vehicle-name h2").filter({ hasText: "Batmobile Tumbler" }));
     await page.waitForTimeout(700);
     assert.equal((await fixture("calls")).filter((call) => call.method === "startBridge").length, 0);
   });
@@ -324,25 +351,75 @@ async function run() {
 
   await checkpoint("Tumbler renders real 3D and keeps camera controls reachable", async () => {
     page = await launch("tumbler");
-    await visible(page.getByLabel("Vehicle model", { exact: true }));
-    await page.getByLabel("Vehicle model", { exact: true }).selectOption("tumbler");
+    await visible(page.locator(".vehicle-name h2").filter({ hasText: "Batmobile Tumbler" }));
     const canvas = page.getByLabel("Interactive Tumbler model", { exact: true });
     await visible(canvas);
     await page.waitForFunction(() => Number(document.querySelector(".tumbler-viewer canvas")?.getAttribute("data-rendered-frames")) > 0);
-    await page.getByRole("button", { name: "Overview", exact: true }).waitFor({ state: "visible" });
+    await page.getByLabel("Camera views", { exact: true }).waitFor({ state: "visible" });
     await page.waitForFunction(() => !document.querySelector(".tumbler-viewer button")?.disabled);
     const canvasBounds = await canvas.boundingBox();
     assert.ok(canvasBounds && canvasBounds.width > 250 && canvasBounds.height > 150, `The model needs a usable rendering area: ${JSON.stringify(canvasBounds)}`);
     assert.equal(await page.locator(".tumbler-viewer").getAttribute("data-live"), "false");
     assert.equal(await page.getByLabel("Follow active part", { exact: true }).isChecked(), true, "Smooth automatic camera must be enabled by default");
+    const cameraMenu = page.locator(".tumbler-viewer__toolbar");
+    assert.equal(await cameraMenu.getAttribute("open"), null, "Camera controls must be compact by default");
+    const trigger = cameraMenu.locator("summary");
+    const triggerBounds = await trigger.boundingBox();
+    const viewportBounds = await page.locator(".tumbler-viewer__viewport").boundingBox();
+    const nameRowBounds = await page.locator(".vehicle-name__row").boundingBox();
+    const nameBounds = await page.locator(".vehicle-name h2").boundingBox();
+    assert.ok(triggerBounds && viewportBounds && triggerBounds.height >= 48 && triggerBounds.width >= 48);
+    assert.ok(nameRowBounds && nameBounds && Math.abs(nameRowBounds.x + nameRowBounds.width - triggerBounds.x - triggerBounds.width) < 2,
+      "The compact camera control must align with the right edge of the vehicle title row");
+    assert.ok(Math.abs(nameBounds.y + nameBounds.height / 2 - triggerBounds.y - triggerBounds.height / 2) < 2,
+      "The camera control and vehicle name must share the same vertical center");
+    assert.ok(triggerBounds.y > viewportBounds.y + viewportBounds.height,
+      "The closed camera control must leave the model viewport unobstructed");
+    await trigger.focus();
+    await page.keyboard.press("Enter");
+    assert.notEqual(await cameraMenu.getAttribute("open"), null, "Keyboard must open the camera controls");
+    for (const button of await cameraMenu.locator("button").all()) {
+      const bounds = await button.boundingBox();
+      assert.ok(bounds && bounds.width >= 48 && bounds.height >= 48, "Each part view needs a touch-sized target");
+    }
+    await page.keyboard.press("Escape");
+    assert.equal(await trigger.evaluate((element) => element === document.activeElement), true, "Escape must restore focus to the compact control");
+    await openCameraMenu();
+    await page.locator(".vehicle-card__heading").click();
+    assert.equal(await cameraMenu.getAttribute("open"), null, "Clicking outside must close the camera menu");
+    assert.equal(await page.getByLabel("Follow active part", { exact: true }).isChecked(), true,
+      "Opening and dismissing camera controls must preserve automatic following");
     await cameraSettled();
     const overviewPosition = await cameraPosition();
     for (const [name, view] of [["Steering", "steering"], ["Rear drive", "drive"], ["Reverse", "reverse"], ["Lights", "lights"], ["Attack", "attack"], ["Boost", "boost"], ["Overview", "overview"]]) {
       const before = await cameraPosition();
-      await page.getByRole("button", { name, exact: true }).click();
+      if (name === "Steering") {
+        const touch = await page.context().newCDPSession(page);
+        try {
+          await touch.send("Emulation.setTouchEmulationEnabled", { enabled: true });
+          const tap = async (locator) => {
+            const bounds = await locator.boundingBox();
+            assert.ok(bounds, "Touch target must be visible");
+            await touch.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 }] });
+            await touch.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+          };
+          await tap(trigger);
+          await visible(cameraMenu.getByRole("button", { name, exact: true }));
+          await tap(cameraMenu.getByRole("button", { name, exact: true }));
+          await page.waitForFunction(() => !document.querySelector(".tumbler-viewer__toolbar").open);
+        } finally {
+          await touch.send("Emulation.setTouchEmulationEnabled", { enabled: false });
+          await touch.detach();
+        }
+      } else {
+        await selectCameraView(name);
+      }
       await page.waitForFunction((view) => document.querySelector(".tumbler-viewer")?.getAttribute("data-camera-view") === view, view);
       await cameraSettled();
       assert.ok(positionDistance(before, await cameraPosition()) > 0.1, `${name} must move the rendered camera, not only its selected label`);
+      const shotPreview = path.join(output, `camera-${view}.png`);
+      await page.locator(".tumbler-viewer__stage").screenshot({ path: shotPreview });
+      screenshots.push(shotPreview);
     }
     const beforeOrbit = await cameraPosition();
     await canvas.focus();
@@ -362,6 +439,9 @@ async function run() {
     assert.ok(await canvasValue("data-rendered-frames") <= idleFrames + 2, "An idle detailed model must not redraw continuously");
     await noHorizontalOverflow();
     await screenshot("20-tumbler-overview-1280x800");
+    const vehiclePreview = path.join(output, "20-vehicle-card.png");
+    await page.locator(".vehicle-card").screenshot({ path: vehiclePreview });
+    screenshots.push(vehiclePreview);
     await resize(760, 600);
     await canvas.scrollIntoViewIfNeeded();
     await cameraSettled();
@@ -369,30 +449,58 @@ async function run() {
     const exit = page.getByRole("button", { name: "Quit Axle", exact: true });
     await exit.scrollIntoViewIfNeeded();
     assert.equal(await exit.isEnabled(), true);
+    const narrowMenu = await openCameraMenu();
+    const panel = await narrowMenu.locator(".tumbler-viewer__camera-panel").boundingBox();
+    const narrowCard = await page.locator(".vehicle-card").boundingBox();
+    const narrowTrigger = await narrowMenu.locator("summary").boundingBox();
+    const narrowName = await page.locator(".vehicle-name h2").boundingBox();
+    assert.ok(panel && narrowCard && panel.x >= narrowCard.x
+      && panel.x + panel.width <= narrowCard.x + narrowCard.width
+      && panel.y >= narrowCard.y, "The upward-opening camera panel must fit inside the narrow vehicle card");
+    assert.ok(narrowTrigger && narrowName && Math.abs(narrowName.y + narrowName.height / 2 - narrowTrigger.y - narrowTrigger.height / 2) < 2,
+      "The camera control must remain beside the vehicle name on a narrow window");
     await screenshot("21-tumbler-760x600");
+    await page.keyboard.press("Escape");
     await resize(1280, 800);
     await canvas.scrollIntoViewIfNeeded();
     await cameraSettled();
+  });
+
+  await checkpoint("Preview diagnostics follow Developer mode without recreating the 3D view", async () => {
+    await page.locator(".tumbler-viewer canvas").evaluate((canvas) => { window.__AXLE_PREVIEW_CANVAS__ = canvas; });
+    const view = await page.locator(".tumbler-viewer").getAttribute("data-camera-view");
+    const dialog = await settingsDialog();
+    await dialog.getByRole("switch", { name: /Developer mode/ }).check();
+    await page.keyboard.press("Escape");
+    await visible(page.locator(".tumbler-viewer__diagnostics"));
+    await visible(page.getByText("Connect your Tumbler to see its controls in motion.", { exact: true }));
+    const settings = await settingsDialog();
+    await settings.getByRole("switch", { name: /Developer mode/ }).uncheck();
+    await page.keyboard.press("Escape");
+    assert.equal(await page.locator(".tumbler-viewer__diagnostics").count(), 0);
+    assert.equal(await page.locator(".tumbler-viewer__note").count(), 0);
+    assert.equal(await page.locator(".tumbler-viewer").getAttribute("data-camera-view"), view);
+    assert.equal(await page.evaluate(() => window.__AXLE_PREVIEW_CANVAS__ === document.querySelector(".tumbler-viewer canvas")), true,
+      "Developer mode must not reload the asset or reset the renderer");
   });
 
   await checkpoint("Live Tumbler steering updates pose and reveals a hidden active part", async () => {
     await page.waitForFunction(() => window.__AXLE_TEST__.snapshot().status === "running");
     await fixture("setup");
     await streamTumblerTelemetry({ steering: 25, front_lights_on: true });
-    await visible(page.getByText("Live wheel feedback", { exact: true }));
+    await page.waitForFunction(() => document.querySelector(".tumbler-viewer canvas")?.getAttribute("data-wheel-motion-basis") === "encoder");
     await page.waitForFunction(() => document.querySelector(".tumbler-viewer")?.getAttribute("data-live") === "true");
     await page.waitForFunction(() => Number(document.querySelector(".tumbler-viewer canvas")?.getAttribute("data-steering")) < -0.01);
     const rightSteering = await canvasValue("data-steering");
-    const follow = page.getByLabel("Follow active part", { exact: true });
-    await follow.uncheck();
-    await page.getByRole("button", { name: "Rear drive", exact: true }).click();
+    await setCameraFollow(false);
+    await selectCameraView("Rear drive");
     await cameraSettled();
     const rearPosition = await cameraPosition();
     await streamTumblerTelemetry({ steering: -50 });
     await page.waitForFunction(() => Number(document.querySelector(".tumbler-viewer canvas")?.getAttribute("data-steering")) > 0.01);
     assert.ok(rightSteering < 0 && (await canvasValue("data-steering")) > 0, "Right/left controller input must turn the actual wheel pivots toward the driver's right/left");
     assert.equal(await page.locator(".tumbler-viewer").getAttribute("data-camera-view"), "drive", "Manual view must be retained while follow is off");
-    await follow.check();
+    await setCameraFollow(true);
     await streamTumblerTelemetry({ steering: -50 });
     await page.waitForFunction(() => document.querySelector(".tumbler-viewer")?.getAttribute("data-camera-view") === "steering");
     await cameraSettled();
@@ -502,7 +610,7 @@ async function run() {
   });
 
   await checkpoint("Reverse camera remains steady through green-lamp blink phases", async () => {
-    await page.getByLabel("Follow active part", { exact: true }).check();
+    await setCameraFollow(true);
     await streamTumblerTelemetry({ throttle: -60, steering: 30, rocket_lights_on: true, measured_wheel_rate: -6 });
     await page.waitForFunction(() => document.querySelector(".tumbler-viewer")?.getAttribute("data-camera-view") === "reverse");
     await cameraSettled();
@@ -520,7 +628,9 @@ async function run() {
       await streamTumblerTelemetry({ throttle: -60, steering: 30, rocket_lights_on: phase, measured_wheel_rate: -6 });
       await page.waitForFunction((on) => document.querySelector(".tumbler-viewer canvas")?.getAttribute("data-reverse-light-intensities")?.split(",").every((value) => on ? Number(value) > 1 : Number(value) < 0.1), phase);
       assert.equal(await page.locator(".tumbler-viewer").getAttribute("data-camera-view"), "reverse");
-      assert.ok(positionDistance(reversePosition, await cameraPosition()) < 0.05, "Blink edges must not move the camera");
+      const phasePosition = await cameraPosition();
+      assert.ok(positionDistance(reversePosition, phasePosition) < 0.05,
+        `Blink edges must not move the camera: ${JSON.stringify({ reversePosition, phasePosition, phase })}`);
       await page.waitForTimeout(1_000);
       assert.ok(positionDistance(reversePosition, await cameraPosition()) < 0.05, "The one-second blink interval must retain the reverse composition");
     }
@@ -540,20 +650,29 @@ async function run() {
     assert.equal(await page.getByLabel("Follow active part", { exact: true }).isChecked(), true);
     await page.evaluate(() => {
       window.__AXLE_CAMERA_SAMPLES__ = [];
-      window.__AXLE_CAMERA_SAMPLING__ = true;
+      const canvas = document.querySelector(".tumbler-viewer canvas");
       let lastFrame;
       function sample() {
-        const canvas = document.querySelector(".tumbler-viewer canvas");
-        const frame = canvas?.getAttribute("data-rendered-frames");
+        const frame = Number(canvas.getAttribute("data-rendered-frames"));
         if (frame !== lastFrame) {
           lastFrame = frame;
           window.__AXLE_CAMERA_SAMPLES__.push({
-            position: canvas?.getAttribute("data-camera-position")?.split(",").map(Number),
-            target: canvas?.getAttribute("data-camera-target")?.split(",").map(Number)
+            frame,
+            position: canvas.getAttribute("data-camera-position").split(",").map(Number),
+            target: canvas.getAttribute("data-camera-target").split(",").map(Number)
           });
         }
-        if (window.__AXLE_CAMERA_SAMPLING__) requestAnimationFrame(sample);
       }
+      // Observe completed render turns. A second animation loop can miss a
+      // rendered frame under load, making a per-frame distance assertion
+      // compare positions separated by several valid camera steps.
+      const observer = new MutationObserver(sample);
+      observer.observe(canvas, { attributes: true, attributeFilter: ["data-rendered-frames"] });
+      window.__AXLE_STOP_CAMERA_SAMPLING__ = () => {
+        sample();
+        observer.disconnect();
+        return window.__AXLE_CAMERA_SAMPLES__;
+      };
       sample();
     });
     await streamTumblerTelemetry({ throttle: 60, steering: 40, boost: true });
@@ -568,12 +687,18 @@ async function run() {
     assert.ok(await canvasValue("data-boost-intensity") > 1);
     assert.ok(await canvasValue("data-front-light-intensity") > 1);
     assert.ok(await canvasValue("data-steering") < 0);
-    const samples = await page.evaluate(() => { window.__AXLE_CAMERA_SAMPLING__ = false; return window.__AXLE_CAMERA_SAMPLES__; });
+    const samples = await page.evaluate(() => window.__AXLE_STOP_CAMERA_SAMPLING__());
+    await fs.writeFile(path.join(output, "camera-transition-samples.json"), JSON.stringify(samples, null, 2));
     assert.ok(samples.length > 8, "The actual rendered camera must travel through intermediate positions");
     for (let index = 0; index < samples.length; index++) {
       assert.ok(positionDistance(samples[index].position, samples[index].target) >= 4.45, "Camera transitions must stay outside the chassis");
       assert.ok(samples[index].position[1] > 0.5, "Camera must remain above the floor");
-      if (index) assert.ok(positionDistance(samples[index].position, samples[index - 1].position) < 2, "Retargeting must not jump between shots");
+      if (index) {
+        const previous = samples[index - 1];
+        assert.equal(samples[index].frame, previous.frame + 1, "Camera continuity must compare consecutive rendered frames");
+        const distance = positionDistance(samples[index].position, previous.position);
+        assert.ok(distance < 2, `Retargeting must not jump between shots: frames ${previous.frame}–${samples[index].frame} moved ${distance}`);
+      }
     }
     await page.waitForTimeout(450);
     assert.equal(await page.locator(".tumbler-viewer").getAttribute("data-camera-view"), "combined", "Simultaneous controls must not cycle between individual parts");
@@ -591,11 +716,11 @@ async function run() {
     assert.equal(await page.locator(".tumbler-viewer").getAttribute("data-active-part"), "drive");
     await streamTumblerTelemetry({ throttle: 60, boost: true, rocket_lights_on: true, flicker: true, measured_wheel_rate: 12 });
     await page.waitForFunction(() => document.querySelector(".tumbler-viewer")?.getAttribute("data-active-part") === "attack");
-    await page.getByRole("button", { name: "Boost", exact: true }).click();
+    await selectCameraView("Boost");
     await cameraSettled();
     await screenshot("23-tumbler-live-boost");
     await fixture("stopTelemetry");
-    await visible(page.getByText("Waiting for wheel feedback", { exact: true }));
+    await page.waitForFunction(() => document.querySelector(".tumbler-viewer canvas")?.getAttribute("data-wheel-motion-basis") === "none");
     assert.equal(await page.locator(".tumbler-viewer").getAttribute("data-live"), "true", "Encoder expiry must occur before the longer control-feedback timeout");
     assert.equal(await canvasValue("data-wheel-angular-velocity"), 0, "Silent encoders must stop immediately without extrapolating drive power");
     await page.waitForFunction(() => document.querySelector(".tumbler-viewer")?.getAttribute("data-live") === "false");
@@ -610,9 +735,10 @@ async function run() {
 
   await checkpoint("Reduced motion retains live pose without revolving wheels or automatic camera", async () => {
     await page.emulateMedia({ reducedMotion: "reduce" });
+    await openCameraMenu();
     await visible(page.getByText("Automatic views paused for reduced motion.", { exact: true }));
     assert.equal(await page.getByLabel("Follow active part", { exact: true }).isDisabled(), true);
-    await page.getByRole("button", { name: "Rear drive", exact: true }).click();
+    await selectCameraView("Rear drive");
     const stillRotation = await canvasValue("data-wheel-rotation");
     await streamTumblerTelemetry({ steering: 30, throttle: 60, measured_wheel_rate: 8 });
     await page.waitForFunction(() => document.querySelector(".tumbler-viewer")?.getAttribute("data-live") === "true");
@@ -635,11 +761,12 @@ async function run() {
     assert.equal(await page.locator(".tumbler-viewer").getAttribute("data-live"), "false");
     await streamTumblerTelemetry({ front_lights_on: true });
     await page.waitForFunction(() => document.querySelector(".tumbler-viewer")?.getAttribute("data-live") === "true");
-    assert.equal(await page.getByLabel("Vehicle model", { exact: true }).isEnabled(), true);
+    assert.equal(await page.getByLabel("Vehicle model", { exact: true }).count(), 0);
   });
   await checkpoint("Touch exit stays reachable on Steam Deck and reports cleanup failure", async () => {
     await resize(1280, 800);
     const exit = page.getByRole("button", { name: "Quit Axle", exact: true });
+    await exit.scrollIntoViewIfNeeded();
     const bounds = await exit.boundingBox();
     assert.ok(bounds && bounds.width >= 48 && bounds.height >= 48);
     const session = await page.context().newCDPSession(page);
@@ -652,6 +779,22 @@ async function run() {
     assert.equal(await exit.evaluate((element) => getComputedStyle(element).outlineStyle), "none");
     await session.detach();
     await screenshot("27-touch-exit");
+  });
+  await checkpoint("A lost 3D context releases the viewer while vehicle controls remain available", async () => {
+    await page.locator(".tumbler-viewer canvas").evaluate((canvas) => {
+      const event = new Event("webglcontextlost", { cancelable: true });
+      canvas.dispatchEvent(event);
+      if (!event.defaultPrevented) throw new Error("Context loss must prevent automatic restoration of the disposed renderer");
+    });
+    await visible(page.getByText("3D preview unavailable", { exact: true }));
+    assert.equal(await page.locator(".tumbler-viewer canvas").count(), 0, "Disposed viewer cannot retain its WebGL canvas");
+    for (const button of await page.locator(".tumbler-viewer__views button").all()) {
+      assert.equal(await button.isDisabled(), true);
+    }
+    await streamTumblerTelemetry({ throttle: 30, measured_wheel_rate: 4 });
+    await page.waitForFunction(() => document.querySelector(".tumbler-viewer")?.getAttribute("data-live") === "true");
+    assert.equal(await page.getByLabel("Vehicle model", { exact: true }).count(), 0);
+    await fixture("stopTelemetry");
   });
   assert.deepEqual(runtimeErrors, [], "Unexpected renderer console/runtime errors");
 }

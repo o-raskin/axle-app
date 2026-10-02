@@ -236,6 +236,7 @@ __marimo__/
 # Project generated files
 ui/electron/resources/bridge/
 ui/electron/test-results/
+ui/electron/coverage/
 release-assets/
 config/port_map.json
 hub_scheme.txt

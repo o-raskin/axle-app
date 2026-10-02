@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass
 from typing import Any
 
 from .. import paths
+from ..profile_validation import integer_mapping, load_profile, number
 
 CONFIG_DIR = paths.CONFIG_DIR
 AUTO_GAMEPAD_PROFILE = "auto"
@@ -29,12 +29,7 @@ def _need(mapping: dict[str, Any], key: str, owner: str, what: str) -> Any:
 
 
 def _load(kind: str, name: str) -> dict[str, Any]:
-    path = CONFIG_DIR / kind / f"{name}.json"
-    if not path.exists():
-        available = sorted(p.stem for p in (CONFIG_DIR / kind).glob("*.json"))
-        raise RuntimeError(f"No {kind} profile '{name}'. Available: {', '.join(available) or 'none'}")
-    loaded: dict[str, Any] = json.loads(path.read_text(encoding="utf-8"))
-    return loaded
+    return load_profile(CONFIG_DIR, kind, name)
 
 
 class GamepadProfile:
@@ -44,10 +39,14 @@ class GamepadProfile:
         """Read one gamepad profile."""
         self.profile_id = name
         self.name: str = data["name"]
-        self.buttons: dict[str, int] = data["buttons"]
-        self.axes: dict[str, int] = data["axes"]
-        self.deadzone: float = data["deadzone"]
-        self.trigger_deadzone: float = data.get("trigger_deadzone", self.deadzone)
+        self.buttons = integer_mapping(data["buttons"], self.name, "buttons")
+        self.axes = integer_mapping(data["axes"], self.name, "axes")
+        self.deadzone = number(data["deadzone"], self.name, "deadzone", maximum=1.0)
+        self.trigger_deadzone = number(
+            data.get("trigger_deadzone", self.deadzone), self.name, "trigger_deadzone", maximum=1.0
+        )
+        if not isinstance(data["triggers_rest_negative"], bool):
+            raise RuntimeError(f"{self.name} triggers_rest_negative must be a boolean")
         self.triggers_rest_negative: bool = data["triggers_rest_negative"]
         self.supports_led: bool = bool(data.get("supports_led", False))
         self.controls: str = data["controls"]
@@ -96,7 +95,7 @@ def available_gamepad_choices() -> list[GamepadProfileChoice]:
     """Return all gamepad profiles available under config/gamepads."""
     choices = []
     for path in sorted((CONFIG_DIR / "gamepads").glob("*.json")):
-        data: dict[str, Any] = json.loads(path.read_text(encoding="utf-8"))
+        data = _load("gamepads", path.stem)
         choices.append(GamepadProfileChoice(profile_id=path.stem, name=str(data.get("name", path.stem))))
     if not choices:
         raise RuntimeError(f"No gamepad profiles found in {CONFIG_DIR / 'gamepads'}")

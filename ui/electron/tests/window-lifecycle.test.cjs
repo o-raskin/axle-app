@@ -4,17 +4,32 @@ const { readFileSync } = require("node:fs");
 const path = require("node:path");
 const { test } = require("node:test");
 const vm = require("node:vm");
+const { vmCoverageFilename } = require("./helpers/vm-coverage.cjs");
+const { pathToFileURL } = require("node:url");
 const { transformSync } = require("esbuild");
 
-const source = readFileSync(path.join(__dirname, "../src/main/index.ts"), "utf8");
-const compiled = transformSync(source, { loader: "ts", format: "cjs" }).code;
+const sourceFile = path.join(__dirname, "../src/main/index.ts");
+const source = readFileSync(sourceFile, "utf8");
+const compiled = transformSync(source, { loader: "ts", format: "cjs", sourcemap: "inline", sourcefile: sourceFile }).code;
 const flush = () => new Promise((resolve) => setImmediate(resolve));
+
+function loadTypeScript(filename) {
+  const code = transformSync(readFileSync(filename, "utf8"), {
+    loader: "ts", format: "cjs", sourcemap: "inline", sourcefile: filename
+  }).code;
+  const module = { exports: {} };
+  const localRequire = (id) => id.startsWith(".")
+    ? loadTypeScript(path.resolve(path.dirname(filename), `${id}.ts`)) : require(id);
+  vm.runInNewContext(code, { require: localRequire, module, exports: module.exports, URL }, { filename: vmCoverageFilename(code, `${filename}.cjs`) });
+  return module.exports;
+}
 
 async function desktopHarness(active = true) {
   const app = new EventEmitter();
   const windows = [];
   const pendingStops = [];
   const errors = [];
+  const externalUrls = [];
   let stopCalls = 0;
   let quitCompleted = false;
   let updateOptions;
@@ -31,8 +46,10 @@ async function desktopHarness(active = true) {
       this.options = options;
       this.destroyed = false;
       this.webContents = new EventEmitter();
+      this.webContents.mainFrame = { url: pathToFileURL("/mock/renderer/index.html").href };
       this.webContents.send = () => {};
-      this.webContents.setWindowOpenHandler = () => {};
+      this.webContents.setWindowOpenHandler = (handler) => { this.openHandler = handler; };
+      app.emit("web-contents-created", {}, this.webContents);
       windows.push(this);
     }
     static getAllWindows() { return windows.filter((window) => !window.destroyed); }
@@ -51,6 +68,7 @@ async function desktopHarness(active = true) {
     }
   }
 
+  app.commandLine = { hasSwitch: () => false };
   app.setName = (name) => { app.name = name; };
   app.getPath = () => "/mock-desktop-user-data";
   app.getName = () => app.name;
@@ -76,28 +94,34 @@ async function desktopHarness(active = true) {
   }
 
   const imports = {
-    electron: { app, BrowserWindow: Window, ipcMain: { handle: (name, callback) => handlers.set(name, callback) }, Menu: { buildFromTemplate() {}, setApplicationMenu() {} }, shell: { openExternal() {} } },
+    electron: { app, BrowserWindow: Window, ipcMain: { handle: (name, callback) => handlers.set(name, callback) }, Menu: { buildFromTemplate() {}, setApplicationMenu() {} }, shell: { openExternal: async (url) => { externalUrls.push(url); } } },
     "node:fs": { mkdirSync() {}, readFileSync() { throw new Error("No saved settings"); }, writeFileSync() {} },
     "node:path": path,
+    "node:url": require("node:url"),
+    "./rendererSecurity": loadTypeScript(path.join(__dirname, "../src/main/rendererSecurity.ts")),
+    "./desktopSettings": loadTypeScript(path.join(__dirname, "../src/main/desktopSettings.ts")),
     "./bridgeProcessService": { BridgeProcessService },
     "./appUpdates": { createAppUpdates: (options) => { updateOptions = options; return { check: async () => { updateCheckCalls += 1; } }; } },
     "../shared/bridge": { bridgeIpcChannels: { startLive: "bridge:start", runCommand: "bridge:command", discover: "bridge:discover" } },
     "../shared/bootstrap": { buildTargets: [], runtimeItems: [] },
     "../shared/settings": { defaultDesktopSettings: { launchFullscreen: false } }
   };
-  const execute = vm.runInNewContext(`(function(require, module, exports, __dirname) { ${compiled}\n})`, {
-    console: { error: (...args) => errors.push(args) },
-    process: { platform: "darwin", arch: "arm64", versions: {}, env: {} }
-  });
   const module = { exports: {} };
-  execute((id) => {
-    assert.ok(id in imports, `Unexpected main-process import: ${id}`);
-    return imports[id];
-  }, module, module.exports, "/mock/main");
+  vm.runInNewContext(compiled, {
+    require: (id) => {
+      assert.ok(id in imports, `Unexpected main-process import: ${id}`);
+      return imports[id];
+    },
+    module, exports: module.exports, __dirname: "/mock/main",
+    console: { error: (...args) => errors.push(args) },
+    URL,
+    process: { platform: "darwin", arch: "arm64", versions: {}, env: {} }
+  }, { filename: vmCoverageFilename(compiled, `${sourceFile}.cjs`) });
   await flush();
 
   return {
-    app, window: windows[0], errors, pendingStops, updateOptions, handlers,
+    app, window: windows[0], errors, pendingStops, updateOptions, handlers, externalUrls,
+    invoke: (name, ...args) => handlers.get(name)({ sender: windows[0].webContents, senderFrame: windows[0].webContents.mainFrame }, ...args),
     get updateCheckCalls() { return updateCheckCalls; },
     get stopCalls() { return stopCalls; },
     get quitCompleted() { return quitCompleted; }
@@ -118,7 +142,7 @@ test("update preparation stops vehicle control and blocks new bridge commands", 
   const preparing = desktop.updateOptions.prepareInstall();
   assert.equal(desktop.stopCalls, 1);
   for (const name of ["bridge:start", "bridge:command"]) {
-    assert.equal(desktop.handlers.get(name)({}, {}).ok, false);
+    assert.equal(desktop.invoke(name, {}).ok, false);
   }
   desktop.pendingStops[0].resolve();
   await preparing;
@@ -126,10 +150,10 @@ test("update preparation stops vehicle control and blocks new bridge commands", 
 
 test("touch Exit waits for motor cleanup and blocks new sessions before quitting", async () => {
   const desktop = await desktopHarness();
-  const exiting = desktop.handlers.get("app:quit")();
+  const exiting = desktop.invoke("app:quit");
   assert.equal(desktop.quitCompleted, false);
-  assert.equal(desktop.handlers.get("bridge:start")({}, {}).ok, false);
-  assert.equal(desktop.handlers.get("bridge:discover")().ok, false);
+  assert.equal(desktop.invoke("bridge:start", {}).ok, false);
+  assert.equal(desktop.invoke("bridge:discover").ok, false);
   desktop.pendingStops[0].resolve();
   assert.equal((await exiting).ok, true);
   assert.equal(desktop.quitCompleted, true);
@@ -137,11 +161,11 @@ test("touch Exit waits for motor cleanup and blocks new sessions before quitting
 
 test("failed Exit cleanup keeps the app open and allows retry", async () => {
   const desktop = await desktopHarness();
-  const exiting = desktop.handlers.get("app:quit")();
+  const exiting = desktop.invoke("app:quit");
   desktop.pendingStops[0].reject(new Error("cleanup failed"));
   assert.equal((await exiting).ok, false);
   assert.equal(desktop.quitCompleted, false);
-  const retry = desktop.handlers.get("app:quit")();
+  const retry = desktop.invoke("app:quit");
   desktop.pendingStops[1].resolve();
   assert.equal((await retry).ok, true);
 });
@@ -201,9 +225,47 @@ test("automatic startup cannot restart control during window close or app quit",
   for (const action of ["close", "quit"]) {
     const desktop = await desktopHarness();
     if (action === "close") desktop.window.close(); else desktop.app.quit();
-    assert.equal(desktop.handlers.get("bridge:start")({}, {}).ok, false);
-    assert.equal(desktop.handlers.get("bridge:discover")().ok, false);
+    assert.equal(desktop.invoke("bridge:start", {}).ok, false);
+    assert.equal(desktop.invoke("bridge:discover").ok, false);
     desktop.pendingStops[0].resolve();
     await flush();
   }
+});
+
+
+test("main IPC rejects a foreign window, subframe, or navigated document before taking action", async () => {
+  const desktop = await desktopHarness();
+  const contents = desktop.window.webContents;
+  const quit = desktop.handlers.get("app:quit");
+  for (const event of [{ sender: {}, senderFrame: contents.mainFrame },
+    { sender: contents, senderFrame: { ...contents.mainFrame } },
+    { sender: contents, senderFrame: null }]) {
+    assert.throws(() => quit(event), /Desktop IPC/);
+  }
+  contents.mainFrame.url = "file:///tmp/untrusted.html";
+  assert.throws(() => desktop.invoke("app:quit"), /Desktop IPC/);
+  assert.equal(desktop.stopCalls, 0);
+  assert.equal(desktop.quitCompleted, false);
+});
+
+test("navigation and redirects cannot replace the application document with arbitrary local files", async () => {
+  const desktop = await desktopHarness(false);
+  const contents = desktop.window.webContents;
+  for (const eventName of ["will-navigate", "will-redirect"]) {
+    for (const url of ["file:///tmp/untrusted.html", "https://example.invalid/"]) {
+      let prevented = false;
+      contents.emit(eventName, { preventDefault: () => { prevented = true; } }, url);
+      assert.equal(prevented, true);
+    }
+    let prevented = false;
+    contents.emit(eventName, { preventDefault: () => { prevented = true; } }, `${contents.mainFrame.url}#main`);
+    assert.equal(prevented, false);
+  }
+  let prevented = false;
+  contents.emit("will-attach-webview", { preventDefault: () => { prevented = true; } });
+  assert.equal(prevented, true);
+  assert.equal(desktop.window.openHandler({ url: "file:///Applications/Terminal.app" }).action, "deny");
+  assert.equal(desktop.externalUrls.length, 0);
+  assert.equal(desktop.window.openHandler({ url: "https://github.com/o-raskin/axle-app" }).action, "deny");
+  assert.deepEqual(desktop.externalUrls, ["https://github.com/o-raskin/axle-app"]);
 });

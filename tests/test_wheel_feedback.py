@@ -8,6 +8,7 @@ from io import StringIO
 from types import SimpleNamespace
 
 import pytest
+from bleak.exc import BleakError
 
 from bridge import session
 from bridge.cars.model_profiles import ModelProfile
@@ -16,7 +17,7 @@ from bridge.cars.tumbler.wheel_feedback import WheelFeedback
 from bridge.dashboard import CarTelemetry
 from bridge.gamepads.profile_loader import GamepadProfile
 from bridge.protocol import JsonLineEmitter, ProtocolLiveConsole
-from bridge.transport import CHAR_UUID, TechnicMoveHub
+from bridge.transport import CHAR_UUID, ModeInfo, PortInfo, TechnicMoveHub
 
 
 def pair(hub: TechnicMoveHub, at: float, left: int, right: int) -> None:
@@ -136,11 +137,11 @@ def test_encoder_setup_and_polling_use_readonly_messages_even_when_status_drains
     async def run() -> None:
         hub = EncoderHub()
         wheels = WheelFeedback(hub, (50, 51))
-        await wheels.start()
-        async with asyncio.timeout(1):
-            while len(hub.port_values) < 2:
-                await asyncio.sleep(0.01)
-        await wheels.close()
+        try:
+            await asyncio.wait_for(wheels.start(), timeout=2.5)
+        finally:
+            await wheels.close()
+        assert len(hub.port_values) == 2
         assert wheels.modes == {50: 2, 51: 2}
         assert wheels.scales == {50: 0.1, 51: 0.1}
         assert all(frame[2] in (0x21, 0x22, 0x41) for frame in hub.sent)
@@ -241,3 +242,140 @@ def test_incomplete_ble_pairs_preserve_rest_and_direction_learning() -> None:
         value = wheels.sample(30, False, at)
     assert value is not None
     assert value["position_radians"] > 0
+
+
+def test_repeated_start_keeps_one_owned_encoder_reader(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def run() -> None:
+        wheels = WheelFeedback(SimpleNamespace(), (50, 51))
+        reads_started = 0
+        reading = asyncio.Event()
+        stopped = []
+
+        async def read() -> None:
+            nonlocal reads_started
+            reads_started += 1
+            reading.set()
+            try:
+                await asyncio.Event().wait()
+            finally:
+                stopped.append(True)
+
+        async def observe() -> None:
+            await reading.wait()
+
+        monkeypatch.setattr(wheels, "_read", read)
+        monkeypatch.setattr(wheels, "_observe_rest", observe)
+        await wheels.start()
+        first_task = wheels.task
+        await wheels.start()
+        assert wheels.task is first_task
+        assert reads_started == 1
+        await wheels.close()
+        await wheels.close()
+        assert stopped == [True]
+        assert first_task is not None and first_task.done()
+
+    asyncio.run(run())
+
+
+def test_optional_encoder_reader_recovers_from_actual_bleak_errors(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def run() -> None:
+        hub = TechnicMoveHub()
+        hub.input_modes = {50: 2, 51: 2}
+        polled = asyncio.Event()
+        requests = []
+        logs = []
+
+        async def request(port: int, kind: int = 1) -> None:
+            requests.append((port, kind))
+            if len(requests) == 1:
+                raise BleakError("Temporary GATT write failure")
+            if port == 51:
+                polled.set()
+
+        monkeypatch.setattr(hub, "request_port_info", request)
+        monkeypatch.setattr("bridge.cars.tumbler.wheel_feedback.READ_RETRY_S", 0)
+        wheels = WheelFeedback(hub, (50, 51), logs.append)
+        wheels.modes = {50: 2, 51: 2}
+        wheels.scales = {50: 1, 51: 1}
+        wheels.task = asyncio.create_task(wheels._read())
+        try:
+            await asyncio.wait_for(polled.wait(), timeout=1.0)
+        finally:
+            await wheels.close()
+        assert requests[:3] == [(50, 0), (50, 0), (51, 0)]
+        assert any("BleakError" in message for message in logs)
+        assert "Wheel encoder reads recovered." in logs
+
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize(
+    "metadata",
+    [
+        ModeInfo(name="POS", symbol="RAD", value_format=(1, 2, 8, 0), raw_range=(-100, 100), si_range=(-100, 100)),
+        ModeInfo(name="POS", symbol="DEG", value_format=(1, 1, 8, 0), raw_range=(-100, 100), si_range=(-100, 100)),
+        ModeInfo(name="POS", symbol="DEG", value_format=(1, 2, 8, 0), raw_range=(0, 0), si_range=(-100, 100)),
+        ModeInfo(name="POS", symbol="DEG", value_format=(1, 2, 8, 0), raw_range=(-100, 100), si_range=(100, -100)),
+        ModeInfo(name="POS", symbol="DEG", value_format=(1, 2, 8, 0), raw_range=(-100, 100), si_range=(0, math.inf)),
+    ],
+    ids=["unknown-units", "short-position-layout", "zero-raw-range", "reversed-scale", "infinite-scale"],
+)
+def test_unsupported_encoder_metadata_does_not_subscribe_or_invent_motion(metadata: ModeInfo) -> None:
+    hub = TechnicMoveHub()
+    hub.port_infos[50] = PortInfo(port_id=50, input_modes=4, mode_infos={2: metadata})
+    logs = []
+    wheels = WheelFeedback(hub, (50, 51), logs.append)
+    assert not asyncio.run(wheels._configure_port(50))
+    assert not wheels.modes and not wheels.scales
+    assert wheels.sample(100, True, 10.0) is None
+    assert len(logs) == 1 and "no supported position input mode" in logs[0]
+
+
+def test_repeated_cached_pairs_do_not_count_as_independent_polarity_evidence() -> None:
+    hub, wheels = feedback()
+    pair(hub, 10.0, 0, 0)
+    wheels.sample(50, False, 10.0)
+    pair(hub, 10.3, 20, -20)
+    assert wheels.sample(50, False, 10.3) is None
+    for at in (10.31, 10.32, 10.33):
+        assert wheels.sample(50, False, at) is None
+    assert wheels.signs is None
+    pair(hub, 10.4, 40, -40)
+    result = wheels.sample(50, False, 10.4)
+    assert wheels.signs == (1, -1)
+    assert result is not None and result["position_radians"] > 0
+
+
+def test_stale_encoder_data_resets_baseline_before_feedback_recovers() -> None:
+    hub, wheels = feedback()
+    wheels.signs = (1, -1)
+    pair(hub, 10.0, 20, -20)
+    wheels.sample(50, False, 10.0)
+    pair(hub, 10.1, 40, -40)
+    travelled = wheels.sample(50, False, 10.1)["position_radians"]
+    assert wheels.sample(50, False, 11.0) is None
+    pair(hub, 11.1, 10000, -10000)
+    recovered = wheels.sample(50, False, 11.1)
+    assert recovered["position_radians"] == travelled
+    assert recovered["sample_age_ms"] == 0
+    pair(hub, 11.2, 10020, -10020)
+    assert wheels.sample(50, False, 11.2)["position_radians"] > travelled
+
+
+def test_unstable_encoder_polarity_keeps_bounded_evidence_until_two_consistent_deltas() -> None:
+    hub, wheels = feedback()
+    pair(hub, 10.0, 0, 0)
+    wheels.sample(50, False, 10.0)
+    for index in range(1000):
+        at = 10.3 + index * 0.1
+        position = 20 if index % 2 == 0 else 0
+        pair(hub, at, position, -position)
+        assert wheels.sample(50, False, at) is None
+    assert wheels.signs is None
+    assert len(wheels.evidence) == 2
+    pair(hub, 110.3, 20, -20)
+    wheels.sample(50, False, 110.3)
+    pair(hub, 110.4, 40, -40)
+    assert wheels.sample(50, False, 110.4) is not None
+    assert wheels.signs == (1, -1)

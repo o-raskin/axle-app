@@ -19,6 +19,8 @@ Python 3.12 provides pygame wheels on all four hosts; Node.js 24 LTS runs the El
 ## Required checks
 
 1. Ruff lint/format, strict mypy, and checksum-pinned actionlint validation of both workflows.
+   The full Python test suite also runs on Python 3.9, the minimum development runtime, including
+   PLAYVM calibration through live telemetry with cold, delayed and unavailable encoder feedback.
 2. Electron lint, type checking, unit tests, production renderer build and fixture UI tests.
 3. Python and Electron unit tests on each native host, then one PyInstaller build reused by the
    terminal distribution and the desktop package. Frozen verification checks embedded profiles,

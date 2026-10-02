@@ -1,4 +1,3 @@
-import { app } from "electron";
 import { spawn, spawnSync, type ChildProcessByStdio } from "node:child_process";
 import { existsSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -26,6 +25,13 @@ type PythonInvocation = {
 
 type ManagedBridgeChild = ChildProcessByStdio<Writable, Readable, Readable>;
 
+type BridgeRuntimeApp = {
+  isPackaged: boolean;
+  resourcesPath: string;
+  getAppPath: () => string;
+  getPath: (name: "userData") => string;
+};
+
 type BridgeProcessPublisher = {
   canStart?: () => boolean;
   publishLog: (event: BridgeLogEvent) => void;
@@ -36,6 +42,7 @@ type BridgeProcessPublisher = {
 const profileIdPattern = /^[A-Za-z0-9_-]+$/;
 const stopTimeoutMs = 3500;
 const killTimeoutMs = 7000;
+const closeTimeoutMs = 10000;
 const protocolName = "lego-technic-bridge";
 const protocolVersion = 1;
 const protocolStatuses: BridgeProcessStatus[] = ["idle", "starting", "running", "stopping", "exited", "error"];
@@ -120,11 +127,11 @@ function normalizeProfileCatalog(value: unknown): BridgeProfileCatalog {
     gamepads,
     defaults: {
       model:
-        typeof candidate.defaults?.model === "string" && profileIdPattern.test(candidate.defaults.model)
+        typeof candidate.defaults?.model === "string" && models.some((model) => model.id === candidate.defaults?.model)
           ? candidate.defaults.model
           : models[0].id,
       gamepad:
-        typeof candidate.defaults?.gamepad === "string" && profileIdPattern.test(candidate.defaults.gamepad)
+        typeof candidate.defaults?.gamepad === "string" && gamepads.some((gamepad) => gamepad.id === candidate.defaults?.gamepad)
           ? candidate.defaults.gamepad
           : gamepads[0].id,
       hubName:
@@ -291,22 +298,30 @@ export class BridgeProcessService {
   private child: ManagedBridgeChild | null = null;
   private currentSnapshot: BridgeProcessSnapshot = { status: "idle" };
   private logId = 0;
+  private sessionId = 0;
   private projectRoot: string | null = null;
   private pythonInvocation: PythonInvocation | null = null;
   private profileCatalog: BridgeProfileCatalog | null = null;
+  private profileRequest: Promise<BridgeProfileCatalog> | null = null;
+  private readonly profileChildren = new Map<ReturnType<typeof spawn>, Promise<void>>();
   private stdoutBuffer = "";
   private stderrBuffer = "";
   private stopRequested = false;
   private stopPromise: Promise<BridgeActionResult> | null = null;
 
-  constructor(private readonly publisher: BridgeProcessPublisher) {}
+  constructor(
+    private readonly publisher: BridgeProcessPublisher,
+    private readonly runtimeApp: BridgeRuntimeApp,
+    private readonly spawnProcess: typeof spawn = spawn,
+    private readonly probeProcess: typeof spawnSync = spawnSync
+  ) {}
 
   getStatus(): BridgeProcessSnapshot {
     return this.currentSnapshot;
   }
 
   hasActiveProcess(): boolean {
-    return this.child !== null;
+    return this.child !== null || this.profileChildren.size > 0;
   }
 
   async getProfiles(): Promise<BridgeProfileCatalog> {
@@ -314,9 +329,15 @@ export class BridgeProcessService {
       return this.profileCatalog;
     }
 
-    const profilesResult = await this.runPythonProtocolCommand("profiles", ["--profiles-json"], 10000);
-    this.profileCatalog = normalizeProfileCatalog(profilesResult.payload);
-    return this.profileCatalog;
+    if (!this.profileRequest) {
+      this.profileRequest = this.runPythonProtocolCommand("profiles", ["--profiles-json"], 10000)
+        .then((result) => {
+          if (!result.ok) throw new Error("Python could not read the profile catalog");
+          this.profileCatalog = normalizeProfileCatalog(result.payload);
+          return this.profileCatalog;
+        }).finally(() => { this.profileRequest = null; });
+    }
+    return await this.profileRequest;
   }
 
   async startLive(options: unknown): Promise<BridgeActionResult> {
@@ -435,12 +456,23 @@ export class BridgeProcessService {
         }
       }, killTimeoutMs);
 
-      child.once("close", () => {
+      const finishStop = (result: BridgeActionResult): void => {
+        if (settled) return;
         settled = true;
         clearTimeout(stopTimer);
         clearTimeout(killTimer);
-        resolveStop({ ok: true, message: "Bridge process stopped." });
-      });
+        clearTimeout(closeTimer);
+        child.removeListener("close", closed);
+        resolveStop(result);
+      };
+      const closed = (): void => { finishStop({ ok: true, message: "Bridge process stopped." }); };
+      const closeTimer = setTimeout(() => {
+        const message = "The bridge did not confirm shutdown. Try Stop again or turn off the vehicle.";
+        this.updateStatus({ error: message });
+        this.emitSystemLog(message);
+        finishStop({ ok: false, message });
+      }, closeTimeoutMs);
+      child.once("close", closed);
 
       // Windows treats child.kill("SIGINT") as forceful termination. A protocol
       // command lets every platform finish motor shutdown and BLE disconnect.
@@ -458,10 +490,25 @@ export class BridgeProcessService {
   }
 
   async stopForAppQuit(): Promise<void> {
-    if (!this.child) {
-      return;
-    }
-    await this.stopActiveProcess();
+    // Profile lookups are workers too: quitting must await their actual close.
+    const profiles = [...this.profileChildren.entries()];
+    for (const [child] of profiles) child.kill("SIGKILL");
+    const waitForProfiles = async (): Promise<void> => {
+      if (profiles.length === 0) return;
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      try {
+        await Promise.race([
+          Promise.all(profiles.map(([, closed]) => closed)),
+          new Promise<never>((_resolve, reject) => {
+            timer = setTimeout(() => reject(new Error("The profile worker did not confirm shutdown")), closeTimeoutMs);
+          })
+        ]);
+      } finally { clearTimeout(timer); }
+    };
+    await Promise.all([
+      this.stopActiveProcess().then((result) => { if (!result.ok) throw new Error(result.message); }),
+      waitForProfiles()
+    ]);
   }
 
   private appendHubArgs(args: string[], value: Record<string, unknown>, fallbackHubName: string): void {
@@ -488,7 +535,7 @@ export class BridgeProcessService {
     }
 
     const invocation = this.getBridgeLaunch();
-    const sessionId = `${operation}-${Date.now().toString(36)}`;
+    const sessionId = `${operation}-${Date.now().toString(36)}-${++this.sessionId}`;
     const args = [...invocation.args, ...scriptArgs];
     const commandLine = formatCommandLine(invocation.command, args);
 
@@ -510,7 +557,7 @@ export class BridgeProcessService {
     this.emitSystemLog(`Starting: ${commandLine}`);
 
     try {
-      const child = spawn(invocation.command, args, {
+      const child = this.spawnProcess(invocation.command, args, {
         cwd: invocation.cwd,
         env: invocation.env,
         stdio: ["pipe", "pipe", "pipe"],
@@ -524,36 +571,40 @@ export class BridgeProcessService {
       this.attachOutputStream(child, "stdout");
       this.attachOutputStream(child, "stderr");
 
+      let processError: string | undefined;
+      let spawned = false;
       child.once("spawn", () => {
-        this.updateStatus({ status: "running", pid: child.pid });
+        if (this.child !== child) return;
+        spawned = true;
+        this.updateStatus({ status: this.stopRequested ? "stopping" : "running", pid: child.pid });
       });
 
       child.once("error", (error) => {
+        if (this.child !== child) return;
         this.flushOutputBuffers();
-        if (this.child === child) {
-          this.child = null;
-        }
+        processError = error.message;
+        // An error does not close stdio. Keep ownership until close so a late
+        // callback cannot overwrite the next worker's session.
         this.updateStatus({
-          status: "error",
+          status: spawned ? this.stopRequested ? "stopping" : "running" : "error",
           error: error.message,
-          endedAt: nowIso(),
-          pid: undefined
+          endedAt: spawned ? undefined : nowIso(),
+          pid: spawned ? child.pid : undefined
         });
         this.emitSystemLog(`Process error: ${error.message}`);
       });
 
       child.once("close", (exitCode, signal) => {
+        if (this.child !== child) return;
         this.flushOutputBuffers();
-        if (this.child === child) {
-          this.child = null;
-        }
+        this.child = null;
         const stoppedByRequest = this.stopRequested;
-        const failed = !stoppedByRequest && exitCode !== 0;
+        const failed = !stoppedByRequest && (exitCode !== 0 || processError !== undefined);
         this.updateStatus({
           status: failed ? "error" : "exited",
           exitCode,
           signal,
-          error: failed ? `Python bridge exited with code ${exitCode ?? "unknown"}` : undefined,
+          error: failed ? processError ?? `Python bridge exited with code ${exitCode ?? "unknown"}` : undefined,
           endedAt: nowIso(),
           pid: undefined
         });
@@ -578,7 +629,13 @@ export class BridgeProcessService {
 
   private failAction(error: unknown): BridgeActionResult {
     const message = errorMessage(error);
-    this.updateStatus({ status: "error", error: message, endedAt: nowIso() });
+    // A request can fail after another worker starts while it awaits profiles.
+    // Keep that worker's active state visible so its Stop action remains usable.
+    this.updateStatus({
+      status: this.child ? this.currentSnapshot.status : "error",
+      error: message,
+      endedAt: this.child ? this.currentSnapshot.endedAt : nowIso()
+    });
     this.emitSystemLog(message);
     return { ok: false, message };
   }
@@ -670,7 +727,7 @@ export class BridgeProcessService {
 
     if (event.type === "process/status") {
       this.updateStatus({
-        status: event.status,
+        status: this.stopRequested ? "stopping" : event.status,
         operation: event.operation ?? this.currentSnapshot.operation
       });
     }
@@ -710,32 +767,45 @@ export class BridgeProcessService {
     scriptArgs: string[],
     timeoutMs: number
   ): Promise<Extract<BridgeProtocolEvent, { type: "command/result" }>> {
+    if (this.publisher.canStart && !this.publisher.canStart()) {
+      throw new Error("Axle is closing or installing an update.");
+    }
     const invocation = this.getBridgeLaunch();
     const args = [...invocation.args, ...scriptArgs];
 
     return await new Promise<Extract<BridgeProtocolEvent, { type: "command/result" }>>((resolveOutput, rejectOutput) => {
-      const child = spawn(invocation.command, args, {
+      const child = this.spawnProcess(invocation.command, args, {
         cwd: invocation.cwd,
         env: invocation.env,
         stdio: ["ignore", "pipe", "pipe"],
         windowsHide: true
       });
+      this.profileChildren.set(child, new Promise<void>((resolveClosed) => {
+        child.once("close", () => {
+          this.profileChildren.delete(child);
+          resolveClosed();
+        });
+      }));
       let stdoutBuffer = "";
       let stderr = "";
       let settled = false;
       let commandResult: Extract<BridgeProtocolEvent, { type: "command/result" }> | null = null;
 
+      const fail = (error: Error): void => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        child.kill("SIGKILL");
+        rejectOutput(error);
+      };
       const timer = setTimeout(() => {
-        if (!settled) {
-          settled = true;
-          child.kill("SIGKILL");
-          rejectOutput(new Error("Timed out while reading Python profile catalog"));
-        }
+        fail(new Error("Timed out while reading Python profile catalog"));
       }, timeoutMs);
 
       child.stdout.setEncoding("utf8");
       child.stderr.setEncoding("utf8");
       child.stdout.on("data", (chunk: string) => {
+        if (settled) return;
         const normalized = `${stdoutBuffer}${chunk}`.replaceAll("\r\n", "\n").replaceAll("\r", "\n");
         const lines = normalized.split("\n");
         stdoutBuffer = lines.pop() ?? "";
@@ -753,7 +823,8 @@ export class BridgeProcessService {
               this.emitLog("protocol", `${event.errorType}: ${event.message}`);
             }
           } catch (error) {
-            rejectOutput(new Error(`Malformed Python protocol output: ${errorMessage(error)}`));
+            fail(new Error(`Malformed Python protocol output: ${errorMessage(error)}`));
+            return;
           }
         }
       });
@@ -766,6 +837,7 @@ export class BridgeProcessService {
         rejectOutput(error);
       });
       child.once("close", (code) => {
+        if (settled) return;
         settled = true;
         clearTimeout(timer);
         if (stdoutBuffer.trim()) {
@@ -798,7 +870,7 @@ export class BridgeProcessService {
     const startingPoints = [
       process.env.LEGO_BRIDGE_PROJECT_ROOT,
       process.cwd(),
-      app.getAppPath(),
+      this.runtimeApp.getAppPath(),
       __dirname
     ].filter((value): value is string => Boolean(value));
 
@@ -858,23 +930,24 @@ export class BridgeProcessService {
       }
     }
 
-    throw new Error("Could not find a working Python 3 command. Set LEGO_BRIDGE_PYTHON to the venv python.");
+    throw new Error("Could not find a working Python 3.9+ command. Set LEGO_BRIDGE_PYTHON to the venv python.");
   }
 
   private pythonWorks(candidate: PythonInvocation): boolean {
-    const result = spawnSync(candidate.command, [...candidate.args, "--version"], {
+    const result = this.probeProcess(candidate.command, [...candidate.args, "--version"], {
       encoding: "utf8",
       timeout: 5000
     });
 
-    return !result.error && result.status === 0;
+    const version = /^Python 3\.(\d+)(?:\.|\s|$)/.exec(`${result.stdout ?? ""}${result.stderr ?? ""}`.trim());
+    return !result.error && result.status === 0 && version !== null && Number(version[1]) >= 9;
   }
 
   private getBridgeLaunch(): BridgeLaunch {
     return resolveBridgeLaunch({
-      isPackaged: app.isPackaged,
-      resourcesPath: process.resourcesPath,
-      userDataPath: app.getPath("userData"),
+      isPackaged: this.runtimeApp.isPackaged,
+      resourcesPath: this.runtimeApp.resourcesPath,
+      userDataPath: this.runtimeApp.getPath("userData"),
       platform: process.platform,
       environment: process.env
     }, () => ({ ...this.getPythonInvocation(), root: this.getProjectRoot() }));

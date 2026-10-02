@@ -70,7 +70,8 @@ and diagnostics; Electron is only a frontend/controller over the structured Pyth
 - LEGO Technic Move Hub (88019)
 - LEGO Technic 42239 Batmobile Tumbler profile, shipped as `config/models/tumbler.json`
 
-Python is required only for development. CI builds with Python 3.12 and Node.js 24 LTS.
+Python is required only for development; the bridge supports Python 3.9 and newer.
+CI tests the minimum runtime and builds releases with Python 3.12 and Node.js 24 LTS.
 
 ## Start From a Release
 
@@ -214,7 +215,8 @@ validate JSON Lines events and use a stdin stop command so the engine can finish
 ```bash
 python3 -m venv lego-env
 source lego-env/bin/activate
-pip install -r requirements.txt
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
 
 cd ui/electron
 npm install
@@ -297,7 +299,8 @@ Manual dispatch builds any selected branch; only `main` publishes. See
 ```bash
 python3 -m venv lego-env
 source lego-env/bin/activate
-pip install -r requirements.txt
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
 python gamepad_bridge.py
 ```
 
@@ -436,9 +439,28 @@ pre-commit install
 pytest tests -q
 ```
 
-The tests cover the byte-level startup sequence, PLAYVM command bits, port-map shape, DualSense and
-Steam Deck profile mappings, Bluetooth status parsing, safe-exit inputs, trigger scaling, speed
-modes, LED colors, rumble behavior, reverse beep cadence, and automatic lights.
+The standard suite uses simulated hardware and does not need a hub or controller. It covers
+startup, reconnect, cancellation, safe shutdown, malformed BLE frames, configuration validation,
+controller normalization, PLAYVM commands, and feedback. Desktop tests cover the JSONL process
+boundary, IPC trust, settings, updates, and renderer state; Electron UI checks exercise the real
+window and 3D viewer.
+
+To inspect coverage and verify the desktop:
+
+```bash
+python -m pytest tests -q --cov --cov-report=term-missing --cov-report=html
+cd ui/electron
+npm ci
+npm run test:coverage
+npm run lint
+npm run build
+npm run test:ui
+```
+
+Python reports include the bridge and release scripts. Desktop coverage includes all production
+source and scripts; UI checks run separately and are not included in its Node coverage percentage.
+CI retains both coverage reports. See the [engineering audit](docs/engineering-audit.md) for the
+fixes, regression coverage, verification results, and remaining hardware checks.
 
 ## Independence
 

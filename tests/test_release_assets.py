@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 import subprocess
 import tarfile
 import zipfile
@@ -11,7 +12,7 @@ import pytest
 from bridge.protocol import profile_catalog_payload, protocol_event, serialize_event
 from scripts import release_assets as assets
 from scripts.build_release import build_command, executable_name
-from scripts.verify_release import expected_profiles, isolated_environment, verify_catalog
+from scripts.verify_release import expected_profiles, isolated_environment, verify_catalog, verify_command
 
 VERSION = "0.1.123"
 COMMIT = "a" * 40
@@ -130,6 +131,11 @@ def test_draft_publishes_only_after_all_uploads(release: Path, monkeypatch: pyte
                 remote["assets"].pop()
         if arguments[:2] == ("release", "view"):
             return json.dumps(remote)
+        if arguments[:2] == ("release", "download"):
+            destination = Path(arguments[arguments.index("--dir") + 1])
+            for index, value in enumerate(arguments):
+                if value == "--pattern":
+                    shutil.copy2(release / arguments[index + 1], destination / arguments[index + 1])
         return ""
 
     monkeypatch.setattr(assets.subprocess, "run", lookup)
@@ -193,3 +199,128 @@ def test_frozen_smoke_removes_development_overrides(tmp_path: Path) -> None:
     assert "PYTHONHOME" not in env
     assert env["LEGO_BRIDGE_HOME"] == str(tmp_path)
     assert env["PATH"] == "/bin"
+
+
+@pytest.mark.parametrize("name", ["release-manifest.json", "SHA256SUMS"])
+def test_verification_cannot_overwrite_files_through_output_symlinks(release: Path, name: str) -> None:
+    outside = release.parent / "user-file"
+    outside.write_text("preserve my edits")
+    (release / name).symlink_to(outside)
+    with pytest.raises(ValueError, match="Unsafe artifact output"):
+        assets.verify(release, VERSION, COMMIT)
+    assert outside.read_text() == "preserve my edits"
+
+
+@pytest.mark.parametrize("index", [0, 1, -1])
+def test_staging_cannot_write_through_preexisting_output_symlinks(release: Path, index: int) -> None:
+    name = assets.asset_names(VERSION, "linux-x64")[index]
+    outside = release.parent / "user-file"
+    outside.write_text("preserve my edits")
+    (release / name).unlink()
+    (release / name).symlink_to(outside)
+    with pytest.raises(ValueError, match="Unsafe artifact output"):
+        assets.stage(release.parent / "source", release, VERSION, COMMIT, "linux-x64")
+    assert outside.read_text() == "preserve my edits"
+
+
+@pytest.mark.parametrize("invalid", [None, [], 42, {"schema": True}, {"assets": [None], "schema": 1}])
+def test_malformed_manifests_fail_with_validation_errors(release: Path, invalid) -> None:
+    path = release / "manifest-linux-x64.json"
+    assets.write_json(path, invalid)
+    with pytest.raises(ValueError):
+        assets.verify(release, VERSION, COMMIT)
+
+
+def test_remote_readback_detects_same_size_corruption(release: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    name = assets.asset_names(VERSION, "linux-x64")[1]
+
+    def download(*arguments):
+        destination = Path(arguments[arguments.index("--dir") + 1])
+        content = (release / name).read_bytes()
+        (destination / name).write_bytes(b"x" * len(content))
+        return ""
+
+    monkeypatch.setattr(assets, "gh", download)
+    with pytest.raises(ValueError, match="Remote artifact checksum"):
+        assets.verify_remote_assets(release, f"v{VERSION}", [name])
+
+
+@pytest.mark.parametrize("state", ["new", "draft", "published"])
+@pytest.mark.parametrize("corrupt", [False, True])
+def test_publication_checks_remote_bytes_before_trusting_assets(
+    release: Path, monkeypatch: pytest.MonkeyPatch, state: str, corrupt: bool
+) -> None:
+    published = state == "published"
+    monkeypatch.setenv("GH_REPO", "owner/repo")
+    manifest = assets.verify(release, VERSION, COMMIT)
+    names = [entry["name"] for entry in manifest["assets"]] + ["release-manifest.json", "SHA256SUMS"]
+    remote = {
+        "isDraft": not published,
+        "targetCommitish": COMMIT,
+        "assets": [{"name": name, "size": (release / name).stat().st_size, "state": "uploaded"} for name in names],
+    }
+    mutations = []
+
+    def lookup(arguments, **kwargs):
+        if state == "new" and arguments[:3] == ["gh", "release", "view"]:
+            return subprocess.CompletedProcess(arguments, 1, "", "release not found")
+        value = COMMIT if "/commits/" in arguments[2] else json.dumps(remote)
+        return subprocess.CompletedProcess(arguments, 0, value, "")
+
+    def github(*arguments):
+        if arguments[0] == "api":
+            return COMMIT
+        if arguments[:2] == ("release", "view"):
+            return json.dumps(remote)
+        if arguments[:2] == ("release", "download"):
+            destination = Path(arguments[arguments.index("--dir") + 1])
+            for name in names:
+                shutil.copy2(release / name, destination / name)
+            if corrupt:
+                path = destination / assets.asset_names(VERSION, "linux-x64")[1]
+                path.write_bytes(b"x" * path.stat().st_size)
+        else:
+            mutations.append(arguments[:2])
+        return ""
+
+    monkeypatch.setattr(assets.subprocess, "run", lookup)
+    monkeypatch.setattr(assets, "gh", github)
+    if corrupt:
+        with pytest.raises(ValueError, match="Remote artifact checksum"):
+            assets.publish(release, VERSION, COMMIT)
+        assert ("release", "edit") not in mutations
+    else:
+        assets.publish(release, VERSION, COMMIT)
+        assert (("release", "edit") in mutations) is (not published)
+    if published:
+        assert mutations == [], "Published release verification must remain read-only"
+    else:
+        assert (("release", "create") in mutations) is (state == "new")
+
+
+@pytest.mark.parametrize("payload", [None, [], "invalid", 1])
+def test_frozen_commands_reject_nonobject_payloads(payload) -> None:
+    stdout = "\n".join(
+        serialize_event(event)
+        for event in [
+            protocol_event("command/result", command="profiles", ok=True, payload=payload),
+            protocol_event("exit", reason="complete", exitCode=0),
+        ]
+    )
+    with pytest.raises(ValueError, match="payload"):
+        verify_command(stdout, "profiles")
+
+
+@pytest.mark.parametrize("defaults", [None, [], "invalid"])
+def test_frozen_catalog_rejects_malformed_defaults(defaults) -> None:
+    payload = profile_catalog_payload()
+    payload["defaults"] = defaults
+    stdout = "\n".join(
+        serialize_event(event)
+        for event in [
+            protocol_event("command/result", command="profiles", ok=True, payload=payload),
+            protocol_event("exit", reason="complete", exitCode=0),
+        ]
+    )
+    with pytest.raises(ValueError, match="defaults"):
+        verify_catalog(stdout, expected_profiles(assets.ROOT))

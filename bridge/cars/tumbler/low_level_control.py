@@ -169,7 +169,10 @@ class LowLevelControl:
         virtual_port = await self._link_drive_ports()
         self.hub.clear_notifications()
         await self.hub.subscribe_port_value(self.play_vm, 0)
-        await self.hub.wait_for("input-format ack", lambda r: r[2] == MSG_INPUT_FORMAT_ACK and r[3] == self.play_vm)
+        await self.hub.wait_for(
+            "input-format ack",
+            lambda r: len(r) >= 5 and r[2] == MSG_INPUT_FORMAT_ACK and r[3] == self.play_vm and r[4] == 0,
+        )
         raw, flags = await self._calibrate(virtual_port)
         return virtual_port, raw, flags
 
@@ -179,7 +182,12 @@ class LowLevelControl:
         await self.hub.send(bytearray([0x06, 0x00, 0x61, 0x01, self.drive_left, self.drive_right]))
         attached, _ = await self.hub.wait_for(
             "AttachedIO for the virtual port",
-            lambda r: r[2] == MSG_ATTACHED_IO and len(r) >= 5 and r[4] == ATTACHED_IO_VIRTUAL,
+            lambda r: (
+                len(r) >= 9
+                and r[2] == MSG_ATTACHED_IO
+                and r[4] == ATTACHED_IO_VIRTUAL
+                and set(r[7:9]) == {self.drive_left, self.drive_right}
+            ),
         )
         return attached[3]
 
@@ -232,15 +240,23 @@ class LowLevelControl:
         return (VM_DRIVE, 0x00, 0x00, 0x00, control, 0x00)
 
     async def _await_echo(self, opcode: int) -> bytes:
-        reply, _ = await self.hub.wait_for_message(
-            f"PLAYVM echo of {opcode:#04x}", MSG_PORT_VALUE, self.play_vm, opcode
-        )
+        if opcode == VM_DRIVE:
+            reply, _ = await self.hub.wait_for(
+                f"PLAYVM echo of {opcode:#04x}",
+                lambda raw: decode_vm_status_report(raw, self.play_vm) is not None,
+            )
+        else:
+            reply, _ = await self.hub.wait_for_message(
+                f"PLAYVM echo of {opcode:#04x}", MSG_PORT_VALUE, self.play_vm, opcode
+            )
         return reply
 
     async def _await_feedback(self, opcode: int) -> None:
         await self.hub.wait_for(
             f"feedback for {opcode:#04x}",
-            lambda r: r[2] == MSG_PORT_OUTPUT_FEEDBACK and r[3] == self.play_vm and bool(r[4] & FEEDBACK_IDLE),
+            lambda r: (
+                len(r) >= 5 and r[2] == MSG_PORT_OUTPUT_FEEDBACK and r[3] == self.play_vm and bool(r[4] & FEEDBACK_IDLE)
+            ),
         )
 
     async def _read_port_info(self, port: int) -> None:

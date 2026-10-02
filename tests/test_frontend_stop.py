@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import threading
 from io import StringIO
 from types import SimpleNamespace
 
@@ -16,16 +17,32 @@ def test_frontend_stop_awaits_cleanup_before_exiting(monkeypatch: pytest.MonkeyP
     output = StringIO()
     cleaned = []
     read_fd, write_fd = os.pipe()
+    invalid_processed = threading.Event()
+    original_read = os.read
+    read_calls = 0
+
+    def read_control(fd: int, size: int) -> bytes:
+        nonlocal read_calls
+        if fd == read_fd:
+            read_calls += 1
+            if read_calls == 2:
+                invalid_processed.set()
+        return original_read(fd, size)
+
+    monkeypatch.setattr(protocol.os, "read", read_control)
 
     async def scenario() -> int:
         started = asyncio.Event()
+        cleanup_started = asyncio.Event()
+        cleanup_release = asyncio.Event()
 
         async def live(*args: object) -> None:
             started.set()
             try:
                 await asyncio.Event().wait()
             finally:
-                await asyncio.sleep(0.01)
+                cleanup_started.set()
+                await cleanup_release.wait()
                 cleaned.append(True)
 
         monkeypatch.setattr(protocol, "run_protocol_live_control", live)
@@ -45,13 +62,16 @@ def test_frontend_stop_awaits_cleanup_before_exiting(monkeypatch: pytest.MonkeyP
             await started.wait()
             if stop_mode == "command":
                 os.write(write_fd, b'{"type":"control/stop"}\n')  # Invalid envelope must be ignored.
-                await asyncio.sleep(0.02)
+                assert await asyncio.to_thread(invalid_processed.wait, 1)
                 assert not task.done()
                 message = json.dumps({"protocol": protocol.PROTOCOL_NAME, "version": 1, "type": "control/stop"})
                 os.write(write_fd, message[:10].encode())
                 os.write(write_fd, message[10:].encode() + b"\n")
             else:
                 os.close(write_fd)
+            await asyncio.wait_for(cleanup_started.wait(), timeout=3)
+            assert not task.done(), "Frontend exit must wait for asynchronous cleanup"
+            cleanup_release.set()
             return await asyncio.wait_for(task, timeout=3)
 
     try:

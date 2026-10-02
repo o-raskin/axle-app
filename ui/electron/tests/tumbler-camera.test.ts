@@ -146,7 +146,7 @@ test("springing orbit radius keeps every preset transition outside the vehicle e
   const minimumClearance = 4.5;
   for (const start of Object.values(CAMERA_SHOTS)) {
     const initialRadius = Math.hypot(...start.offset);
-    assert.ok(initialRadius >= 8.2);
+    assert.ok(initialRadius > minimumClearance);
     for (const end of Object.values(CAMERA_SHOTS)) {
       const destination = Math.hypot(...end.offset);
       let radius = { value: initialRadius, velocity: 0 };

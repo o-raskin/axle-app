@@ -26,6 +26,7 @@ export class AutomaticSession {
   async reconcile(now = Date.now()): Promise<void> {
     if (this.busy || this.disposed || !this.enabled || !this.desired || now < this.retryAt) return;
     this.busy = true;
+    const requestedAt = Date.now();
     try {
       let snapshot = await this.api.getBridgeStatus();
       if (this.disposed || !this.enabled) return;
@@ -51,7 +52,7 @@ export class AutomaticSession {
         snapshot = await this.api.getBridgeStatus();
       }
     } catch (error) {
-      this.retryAt = now + 3000;
+      this.retryAt = now + Math.max(0, Date.now() - requestedAt) + 3000;
       if (!this.disposed) this.report(error instanceof Error ? error.message : String(error));
     } finally { this.busy = false; }
   }

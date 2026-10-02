@@ -5,6 +5,7 @@ import struct
 import sys
 import time
 from collections import deque
+from contextlib import suppress
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
@@ -17,15 +18,22 @@ from bleak import BleakClient, BleakScanner  # noqa: E402
 CHAR_UUID = "00001624-1212-efde-1623-785feabcd123"
 
 
+def hub_advertisement_matches(name: str, address: str | None, device: Any, advertisement: Any) -> bool:
+    """Match a hub using the stable address or either BLE name representation."""
+    if address:
+        device_address = getattr(device, "address", "")
+        return bool(isinstance(device_address, str) and device_address.lower() == address.lower())
+    local_name = getattr(advertisement, "local_name", None)
+    device_name = getattr(device, "name", None)
+    return any(isinstance(candidate, str) and name in candidate for candidate in (local_name, device_name))
+
+
 async def find_advertised_hub(name: str, address: str | None, timeout: float = 3.0) -> Any:
     """Find a BLE advertisement without opening a connection or writing to the hub."""
-
-    def matches(device: Any, advertisement: Any) -> bool:
-        if address:
-            return bool(device.address.lower() == address.lower())
-        return bool(name in (advertisement.local_name or device.name or ""))
-
-    return await BleakScanner.find_device_by_filter(matches, timeout=timeout)
+    return await BleakScanner.find_device_by_filter(
+        lambda device, advertisement: hub_advertisement_matches(name, address, device, advertisement),
+        timeout=timeout,
+    )
 
 
 # LWP3 message types we care about (byte 2 of every message).
@@ -126,39 +134,57 @@ class TechnicMoveHub:
         self.notifications: deque[bytes] = deque(maxlen=NOTIFICATION_BUFFER)
         self.input_modes: dict[int, int] = {}
         self.port_values: dict[int, tuple[int, bytes, float]] = {}
+        # PLAYVM commands and optional encoder polling share one GATT
+        # characteristic. Bleak does not guarantee ordering for concurrent
+        # write-without-response calls, so serialize every downstream frame.
+        self._write_lock: asyncio.Lock | None = None
 
     async def connect(self) -> None:
         """Scan, connect, pair and arm every notifying characteristic."""
-
-        def matches(device: Any, _adv: Any) -> bool:
-            if self.hub_address:
-                return bool(device.address.lower() == self.hub_address)
-            return bool(device.name and self.hub_name in device.name)
-
+        if self.is_connected:
+            return
+        if self.client is not None:
+            await self.disconnect()
+        self._clear_connection_state()
         # discover() collects for the whole timeout; this returns on the first matching advert.
-        target = await BleakScanner.find_device_by_filter(matches, timeout=SCAN_TIMEOUT_S)
+        target = await BleakScanner.find_device_by_filter(
+            lambda device, advertisement: hub_advertisement_matches(
+                self.hub_name, self.hub_address, device, advertisement
+            ),
+            timeout=SCAN_TIMEOUT_S,
+        )
         if target is None:
             raise RuntimeError("Technic Move hub not found")
 
-        self.client = BleakClient(target)
-        await self.client.connect()
-        if not self.client.is_connected:
-            raise RuntimeError("Failed to connect to hub")
-
+        client = BleakClient(target)
+        self.client = client
         try:
-            await self.client.pair(protection_level=2)
-        except Exception:
-            pass
+            await client.connect()
+            if not client.is_connected:
+                raise RuntimeError("Failed to connect to hub")
+            self.hub_address = target.address.lower()
+            try:
+                await client.pair(protection_level=2)
+            except Exception:
+                # Pairing is optional on platforms which do not expose it.
+                pass
 
-        await self._request_fast_connection()
+            await self._request_fast_connection()
 
-        # Control+ subscribes to every notifying characteristic before its first command,
-        # not just the LWP3 one — the hub sees which CCCDs a client armed.
-        for service in self.client.services:
-            for char in service.characteristics:
-                if "notify" not in char.properties:
-                    continue
-                await self.client.start_notify(char, self._handle_notification)
+            def notification(sender: Any, data: bytearray) -> None:
+                # Old callbacks can arrive after a disconnect or replacement.
+                if self.client is client:
+                    self._handle_notification(sender, data)
+
+            # Control+ subscribes to all notifying characteristics before writing.
+            for service in client.services:
+                for char in service.characteristics:
+                    if "notify" in char.properties:
+                        await client.start_notify(char, notification)
+        except BaseException:
+            with suppress(Exception):
+                await self.disconnect()
+            raise
 
     async def _request_fast_connection(self) -> None:
         """Ask Windows for a fast connection interval.
@@ -187,9 +213,18 @@ class TechnicMoveHub:
         return bool(self.client and self.client.is_connected)
 
     async def disconnect(self) -> None:
-        """Drop the BLE link if it is still up."""
-        if self.is_connected and self.client:
-            await self.client.disconnect()
+        """Release the BLE client and invalidate all state from that connection."""
+        client, self.client = self.client, None
+        self._clear_connection_state()
+        if client is not None:
+            await client.disconnect()
+
+    def _clear_connection_state(self) -> None:
+        self.attached_devices.clear()
+        self.port_infos.clear()
+        self.notifications.clear()
+        self.input_modes.clear()
+        self.port_values.clear()
 
     async def wait_for_topology(self, seconds: float = 2.0) -> None:
         """Give the hub time to announce its ports."""
@@ -223,11 +258,16 @@ class TechnicMoveHub:
 
     async def send(self, data: bytes | bytearray) -> None:
         """Write one LWP3 message, without response, as the app does."""
-        if not self.is_connected or not self.client:
-            raise RuntimeError("Hub is not connected")
-        # Control+ sends every message write-without-response; bleak would otherwise pick
-        # write-with-response and each command would wait on its own ATT transaction.
-        await self.client.write_gatt_char(CHAR_UUID, data, response=False)
+        client = self.client
+        # Python 3.9 binds locks at creation; initialize on the running loop.
+        if self._write_lock is None:
+            self._write_lock = asyncio.Lock()
+        async with self._write_lock:
+            if client is None or client is not self.client or not client.is_connected:
+                raise RuntimeError("Hub is not connected")
+            # Control+ sends every message write-without-response; bleak would otherwise pick
+            # write-with-response and each command would wait on its own ATT transaction.
+            await client.write_gatt_char(CHAR_UUID, data, response=False)
 
     async def request_port_info(self, port_id: int, information_type: int = 0x01) -> None:
         """Ask a port to describe itself."""
@@ -279,7 +319,26 @@ class TechnicMoveHub:
         if len(data) < 3:
             return
 
+        # This characteristic sends one short LWP3 frame per notification.
+        # Reject incomplete frames before they can satisfy a startup wait.
+        if data[0] != len(data) or data[1] != 0:
+            return
+
         message_type = data[2]
+        minimum = {
+            MSG_ATTACHED_IO: 5,
+            MSG_PORT_INFO: 11,
+            MSG_MODE_INFO: 6,
+            MSG_PORT_VALUE: 5,
+            MSG_INPUT_FORMAT_ACK: 10,
+            MSG_PORT_OUTPUT_FEEDBACK: 5,
+        }
+        if len(data) < minimum.get(message_type, 3):
+            return
+        if message_type == MSG_ATTACHED_IO:
+            event = data[4]
+            if event not in (0, 1, 2) or len(data) < {0: 5, 1: 15, 2: 9}[event]:
+                return
         self.notifications.append(bytes(data))
         if message_type == MSG_ATTACHED_IO:
             self._parse_attached_io(data)
@@ -303,6 +362,9 @@ class TechnicMoveHub:
         event = data[4]
         if event == 0x00:
             self.attached_devices.pop(port_id, None)
+            self.port_infos.pop(port_id, None)
+            self.input_modes.pop(port_id, None)
+            self.port_values.pop(port_id, None)
             return
 
         if event == 0x01 and len(data) >= 15:

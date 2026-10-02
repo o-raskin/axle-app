@@ -1,6 +1,6 @@
 import { app, BrowserWindow, ipcMain, Menu, type MenuItemConstructorOptions, shell } from "electron";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 
 import { BridgeProcessService } from "./bridgeProcessService";
 import { createAppUpdates } from "./appUpdates";
@@ -12,10 +12,13 @@ import {
   type BridgeProtocolEvent
 } from "../shared/bridge";
 import { buildTargets, type BootstrapState, runtimeItems } from "../shared/bootstrap";
-import { defaultDesktopSettings, type DesktopSettings, type DesktopSettingsPatch } from "../shared/settings";
+import type { DesktopSettingsPatch } from "../shared/settings";
+import { DesktopSettingsStore } from "./desktopSettings";
+import { assertTrustedRenderer, isSafeExternalUrl, isTrustedRendererUrl } from "./rendererSecurity";
 
 const appDisplayName = "LEGO Technic Gamepad Bridge";
 const rendererDevUrl = process.env.ELECTRON_RENDERER_URL;
+const rendererUrl = rendererDevUrl ?? pathToFileURL(join(__dirname, "../renderer/index.html")).href;
 let mainWindow: BrowserWindow | null = null;
 let appQuitAfterBridgeStop = false;
 let appQuitPending = false;
@@ -44,51 +47,19 @@ const bridgeService = new BridgeProcessService({
       window.webContents.send(bridgeIpcChannels.event, event);
     }
   }
+}, {
+  isPackaged: app.isPackaged,
+  resourcesPath: process.resourcesPath,
+  getAppPath: () => app.getAppPath(),
+  getPath: (name) => app.getPath(name)
 });
 
 function getSettingsPath(): string {
   return join(app.getPath("userData"), "desktop-settings.json");
 }
 
-function normalizeSettings(value: unknown): DesktopSettings {
-  if (!value || typeof value !== "object") {
-    return defaultDesktopSettings;
-  }
-
-  const candidate = value as Partial<DesktopSettings>;
-
-  return {
-    launchFullscreen:
-      typeof candidate.launchFullscreen === "boolean"
-        ? candidate.launchFullscreen
-        : defaultDesktopSettings.launchFullscreen
-  };
-}
-
-function readDesktopSettings(): DesktopSettings {
-  try {
-    return normalizeSettings(JSON.parse(readFileSync(getSettingsPath(), "utf8")));
-  } catch {
-    return defaultDesktopSettings;
-  }
-}
-
-function writeDesktopSettings(settings: DesktopSettings): void {
-  const settingsPath = getSettingsPath();
-
-  mkdirSync(dirname(settingsPath), { recursive: true });
-  writeFileSync(settingsPath, `${JSON.stringify(settings, null, 2)}\n`, "utf8");
-}
-
-function updateDesktopSettings(patch: DesktopSettingsPatch): DesktopSettings {
-  const currentSettings = readDesktopSettings();
-  const nextSettings = normalizeSettings({
-    ...currentSettings,
-    ...patch
-  });
-
-  writeDesktopSettings(nextSettings);
-  return nextSettings;
+function desktopSettings(): DesktopSettingsStore {
+  return new DesktopSettingsStore(getSettingsPath());
 }
 
 function getBootstrapState(): BootstrapState {
@@ -166,7 +137,13 @@ function installApplicationMenu(): void {
 }
 
 function registerIpcHandlers(): void {
-  ipcMain.handle("app:quit", async () => {
+  const handle: typeof ipcMain.handle = (channel, listener) => {
+    ipcMain.handle(channel, (event, ...args: unknown[]) => {
+      assertTrustedRenderer(event, mainWindow?.webContents ?? null, rendererUrl);
+      return listener(event, ...args);
+    });
+  };
+  handle("app:quit", async () => {
     if (exitRequested) return { ok: false, message: "Axle is already closing." };
     exitRequested = true;
     try {
@@ -181,15 +158,15 @@ function registerIpcHandlers(): void {
       return { ok: false, message: "Control could not be stopped. Try again or turn off the vehicle." };
     }
   });
-  ipcMain.handle(bridgeIpcChannels.discover, () => {
+  handle(bridgeIpcChannels.discover, () => {
     if (updateInstalling || exitRequested) return { ok: false, message: "Axle is closing." };
     if (app.commandLine.hasSwitch("disable-hardware-discovery")) return { ok: true };
     return bridgeService.startDiscovery();
   });
-  ipcMain.handle("bootstrap:get-state", () => getBootstrapState());
-  ipcMain.handle("settings:get", () => readDesktopSettings());
-  ipcMain.handle("settings:update", (_event, patch: DesktopSettingsPatch) => {
-    const nextSettings = updateDesktopSettings(patch);
+  handle("bootstrap:get-state", () => getBootstrapState());
+  handle("settings:get", () => desktopSettings().read());
+  handle("settings:update", (_event, patch: DesktopSettingsPatch) => {
+    const nextSettings = desktopSettings().update(patch);
 
     if (mainWindow) {
       mainWindow.setFullScreen(nextSettings.launchFullscreen);
@@ -197,13 +174,13 @@ function registerIpcHandlers(): void {
 
     return nextSettings;
   });
-  ipcMain.handle(bridgeIpcChannels.getProfiles, () => bridgeService.getProfiles());
-  ipcMain.handle(bridgeIpcChannels.getStatus, () => bridgeService.getStatus());
-  ipcMain.handle(bridgeIpcChannels.startLive, (_event, options: unknown) => updateInstalling || exitRequested
+  handle(bridgeIpcChannels.getProfiles, () => bridgeService.getProfiles());
+  handle(bridgeIpcChannels.getStatus, () => bridgeService.getStatus());
+  handle(bridgeIpcChannels.startLive, (_event, options: unknown) => updateInstalling || exitRequested
     ? { ok: false, message: "Axle is restarting to install an update." }
     : app.commandLine.hasSwitch("disable-hardware-discovery") ? { ok: true } : bridgeService.startLive(options));
-  ipcMain.handle(bridgeIpcChannels.stop, () => bridgeService.stopActiveProcess());
-  ipcMain.handle(bridgeIpcChannels.runCommand, (_event, request: unknown) => updateInstalling || exitRequested
+  handle(bridgeIpcChannels.stop, () => bridgeService.stopActiveProcess());
+  handle(bridgeIpcChannels.runCommand, (_event, request: unknown) => updateInstalling || exitRequested
     ? { ok: false, message: "Axle is restarting to install an update." } : bridgeService.runCommand(request));
 }
 
@@ -218,7 +195,7 @@ function stopBridgeBeforeClosing(): Promise<void> {
 
 function createMainWindow(): void {
   exitRequested = false;
-  const settings = readDesktopSettings();
+  const settings = desktopSettings().read();
 
   mainWindow = new BrowserWindow({
     width: 1180,
@@ -271,7 +248,9 @@ function createMainWindow(): void {
   });
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    void shell.openExternal(url);
+    if (isSafeExternalUrl(url)) {
+      void shell.openExternal(url).catch((error: unknown) => console.error("Could not open external link", error));
+    }
     return { action: "deny" };
   });
 
@@ -288,13 +267,12 @@ function createMainWindow(): void {
 
 app.on("web-contents-created", (_event, contents) => {
   contents.on("will-navigate", (event, url) => {
-    const isDevRenderer = rendererDevUrl && url.startsWith(rendererDevUrl);
-    const isPackagedRenderer = url.startsWith("file://");
-
-    if (!isDevRenderer && !isPackagedRenderer) {
-      event.preventDefault();
-    }
+    if (!isTrustedRendererUrl(url, rendererUrl)) event.preventDefault();
   });
+  contents.on("will-redirect", (event, url) => {
+    if (!isTrustedRendererUrl(url, rendererUrl)) event.preventDefault();
+  });
+  contents.on("will-attach-webview", (event) => { event.preventDefault(); });
 });
 
 app.on("window-all-closed", () => {

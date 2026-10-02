@@ -8,6 +8,8 @@ from contextlib import suppress
 from dataclasses import dataclass
 from typing import Any, Callable
 
+from bleak.exc import BleakError
+
 from .audio import ReverseBeep, reverse_beep_status
 from .cars.model_profiles import DEFAULT_REQUIRED_PORT_ROLES, ModelProfile, ModelProfileChoice, available_model_choices
 from .cars.tumbler.low_level_control import LowLevelControl
@@ -36,17 +38,21 @@ from .platforms.current import bluetooth_status, release_winrt_sta_for_pygame
 from .port_map import load_port_map, port_id
 from .safety import SafetyLimits
 from .settings import (
+    BOOST_RUMBLE_STRENGTH,
+    BOOST_UNAVAILABLE_RUMBLE_MS,
     CRASH_RUMBLE_STRENGTH,
     LOOP_INTERVAL_S,
     RECONNECT_DUALSENSE,
     RECONNECT_HUB,
     SESSION_EXIT,
+    SPEED_RUMBLE_STRENGTH,
     STARTUP_RETRY_DELAY_S,
 )
-from .transport import DEFAULT_HUB_NAME, TechnicMoveHub
+from .transport import DEFAULT_HUB_NAME, IO_DRIVE_MOTOR, IO_LIGHTS, IO_PLAY_VM, IO_STEERING_MOTOR, TechnicMoveHub
 
 DEFAULT_MODEL_PROFILE = "tumbler"
 MODEL_SELECTION_POLL_INTERVAL_S = 0.05
+SHUTDOWN_TIMEOUT_S = 1.0
 
 
 @dataclass(frozen=True)
@@ -377,6 +383,14 @@ def required_hub_port_issue(
     required_port_roles: Iterable[str] | None = None,
 ) -> str | None:
     """Return a user-facing issue when the connected hub does not match the saved port map."""
+    expected_types = {
+        "drive_left": IO_DRIVE_MOTOR,
+        "drive_right": IO_DRIVE_MOTOR,
+        "steering": IO_STEERING_MOTOR,
+        "lights": IO_LIGHTS,
+        "play_vm": IO_PLAY_VM,
+    }
+    used_ports: set[int] = set()
     for role in tuple(required_port_roles or DEFAULT_REQUIRED_PORT_ROLES):
         try:
             port = port_id(port_map, role)
@@ -387,6 +401,12 @@ def required_hub_port_issue(
                 f"The saved {role} port {port:#04x} was not reported by the hub. "
                 "Check the model, then run a hub scan again if the wiring changed."
             )
+        if port in used_ports:
+            return f"The saved {role} port {port:#04x} is also assigned to another required role. Run a hub scan again."
+        used_ports.add(port)
+        expected = expected_types.get(role)
+        if expected is not None and hub.attached_devices[port].io_type_id != expected:
+            return f"The saved {role} port {port:#04x} reports the wrong device type. Run a hub scan again."
     return None
 
 
@@ -500,6 +520,17 @@ async def wait_for_drive_hardware(
 
     try:
         while True:
+            if gamepad is not None:
+                disconnected, exit_requested = poll_controller_events(
+                    gamepad.pygame_mod, gamepad.joystick, gamepad.profile.optional_button("exit")
+                )
+                if exit_requested:
+                    return None
+                if disconnected:
+                    with suppress(Exception):
+                        gamepad.pygame_mod.quit()
+                    gamepad = None
+                    gamepad_detail = "disconnected; waiting for a controller"
             if hub is None and hub_task is None:
                 hub_task = asyncio.create_task(
                     connect_hub_for_drive(port_map, hub_name, hub_address, required_port_roles)
@@ -533,6 +564,12 @@ async def wait_for_drive_hardware(
                     hub_task = None
                 else:
                     hub_task = None
+
+            if hub is not None and not hub.is_connected:
+                with suppress(Exception):
+                    await hub.disconnect()
+                hub = None
+                hub_detail = "disconnected; press the hub button to reconnect"
 
             setup.show(
                 title,
@@ -580,24 +617,52 @@ async def safe_shutdown(
     log: Callable[[str], None] | None = None,
 ) -> None:
     """Stop the car, drop the link and close pygame, from whatever state we are in."""
-    log_message = log or print
+    cleanup = asyncio.create_task(_perform_shutdown(control, hub, pygame_mod, gamepad_led, log))
+    cancelled = False
+    while not cleanup.done():
+        try:
+            await asyncio.shield(cleanup)
+        except asyncio.CancelledError:
+            # Repeated cancellation cannot interrupt a motor stop in flight.
+            cancelled = True
+    cleanup.result()
+    if cancelled:
+        raise asyncio.CancelledError
+
+
+async def _perform_shutdown(
+    control: LowLevelControl | None,
+    hub: TechnicMoveHub,
+    pygame_mod: Any,
+    gamepad_led: ControllerLed | None,
+    log: Callable[[str], None] | None,
+) -> None:
+
+    def log_message(message: str) -> None:
+        # A closed frontend pipe must never prevent motor cleanup.
+        with suppress(Exception):
+            (log or print)(message)
+
     log_message("Stopping motors...")
     try:
         if control is not None and hub.is_connected:
-            await control.drive(0, 0, lights=False)
+            await asyncio.wait_for(control.drive(0, 0, lights=False), timeout=SHUTDOWN_TIMEOUT_S)
     except Exception as exc:
         log_message(f"Stop command failed: {exc}")
     try:
-        await hub.disconnect()
+        await asyncio.wait_for(hub.disconnect(), timeout=SHUTDOWN_TIMEOUT_S)
     except Exception as exc:
         log_message(f"Disconnect failed: {exc}")
     try:
         if gamepad_led is not None:
             gamepad_led.close()
+    except Exception as exc:
+        log_message(f"Controller LED cleanup failed: {exc}")
+    try:
         if pygame_mod is not None:
             pygame_mod.quit()
-    except Exception:
-        pass
+    except Exception as exc:
+        log_message(f"Controller cleanup failed: {exc}")
     log_message("Safe exit.")
 
 
@@ -612,20 +677,20 @@ async def run_live_session(
     hub = hardware.hub
     pygame_mod = hardware.pygame_mod
     joystick = hardware.joystick
-    limits = SafetyLimits(max_drive_power=model.max_drive, max_steering_power=model.max_steering)
     control = None
     gamepad_led = None
     reverse_beep = None
     console = live_console or LiveConsole()
     reconnect_reason = SESSION_EXIT
     boost_rumble = BoostRumble()
-    wheels = (
-        WheelFeedback(hub, (port_id(port_map, "drive_left"), port_id(port_map, "drive_right")), log=console.log)
-        if model.name == "42239 Batmobile Tumbler"
-        else None
-    )
+    wheels = None
 
     try:
+        limits = SafetyLimits(max_drive_power=model.max_drive, max_steering_power=model.max_steering)
+        if model.name == "42239 Batmobile Tumbler":
+            wheels = WheelFeedback(
+                hub, (port_id(port_map, "drive_left"), port_id(port_map, "drive_right")), log=console.log
+            )
         console.log(f"Hub ready: {len(hub.attached_devices)} ports attached")
 
         control = LowLevelControl(hub, port_map, model, limits)
@@ -690,10 +755,16 @@ async def run_live_session(
                     boost_rumble.update(joystick, rumble_strength)
                 else:
                     rumble_strength = boost_rumble_strength(frame.boost_feedback_at, frame.boost_until, now)
-                    if rumble_strength > 0.0 or now >= frame.drive_rumble_paused_until:
+                    if now >= frame.drive_rumble_paused_until:
                         if rumble_strength == 0.0:
                             rumble_strength = drive_rumble_strength(frame.trigger_pressure, frame.speed_mode)
                         boost_rumble.update(joystick, rumble_strength)
+                    else:
+                        warning_at = runtime.boost_unavailable_feedback.started_at
+                        warning_active = (
+                            warning_at is not None and 0 <= now - warning_at < BOOST_UNAVAILABLE_RUMBLE_MS / 1000
+                        )
+                        rumble_strength = BOOST_RUMBLE_STRENGTH if warning_active else SPEED_RUMBLE_STRENGTH
                 led_color = update_gamepad_led(
                     gamepad_led,
                     frame.speed_mode,
@@ -760,21 +831,40 @@ async def run_live_session(
     except (KeyboardInterrupt, asyncio.CancelledError):
         reconnect_reason = SESSION_EXIT
         console.log("Interrupt - shutting down...")
-    except (OSError, RuntimeError) as exc:
+    except (BleakError, OSError, RuntimeError) as exc:
         reconnect_reason = RECONNECT_HUB
         console.log(f"Link lost: {type(exc).__name__}: {exc}")
     except Exception as exc:
         reconnect_reason = RECONNECT_DUALSENSE
         console.log(f"Controller input stopped: {type(exc).__name__}: {exc}")
     finally:
-        if wheels is not None:
-            await wheels.close()
-        if joystick is not None:
-            boost_rumble.stop(joystick)
-        if reverse_beep is not None:
-            reverse_beep.stop()
-        console.stop()
-        await safe_shutdown(control, hub, pygame_mod, gamepad_led, log=console.log)
+        # Optional feedback and terminal failures cannot short-circuit safety.
+        def log_cleanup_failure(component: str, error: Exception) -> None:
+            with suppress(Exception):
+                console.log(f"{component} cleanup failed: {type(error).__name__}: {error}")
+
+        try:
+            if wheels is not None:
+                try:
+                    await wheels.close()
+                except Exception as exc:
+                    log_cleanup_failure("Wheel feedback", exc)
+            if joystick is not None:
+                try:
+                    boost_rumble.stop(joystick)
+                except Exception as exc:
+                    log_cleanup_failure("Rumble", exc)
+            if reverse_beep is not None:
+                try:
+                    reverse_beep.stop()
+                except Exception as exc:
+                    log_cleanup_failure("Reverse audio", exc)
+            try:
+                console.stop()
+            except Exception as exc:
+                log_cleanup_failure("Console", exc)
+        finally:
+            await safe_shutdown(control, hub, pygame_mod, gamepad_led, log=console.log)
     return reconnect_reason
 
 

@@ -201,32 +201,20 @@ function App() {
                   <span className="eyebrow">YOUR VEHICLE</span>
                   <span className="vehicle-tag">{tumbler ? "INTERACTIVE 3D" : "GAMEPAD CONTROL"}</span>
                 </div>
-                <div className="vehicle-art">{tumbler
-                  ? <TumblerViewer state={vehicleState} receivedAt={bridge.telemetryReceivedAt} />
-                  : <VehicleIllustration connected={ready} />}</div>
-                <div className="vehicle-card__bottom">
-                  <div className="vehicle-name">
-                    <p className="eyebrow">{modelNumber ? `MODEL ${modelNumber}` : "YOUR BUILD"}</p>
-                    <h2>{vehicleName}</h2>
-                    <p>Built for a real-world adventure.</p>
-                  </div>
-                  {bridge.profiles && bridge.profiles.models.length > 0 && (
-                    <label className="vehicle-picker">
-                      <span className="sr-only">Vehicle model</span>
-                      <select
-                        aria-label="Vehicle model"
-                        value={bridge.selectedModel}
-                        disabled={bridge.loading || Boolean(bridge.profileError)}
-                        onChange={(event) => bridge.setSelectedModel(event.target.value)}
-                      >
-                        {bridge.profiles.models.map((model) => (
-                          <option key={model.id} value={model.id}>{model.name}</option>
-                        ))}
-                      </select>
-                    </label>
-                  )}
-                  {!tumbler && <span className="vehicle-card__motif" aria-hidden="true"><i /><i /><i /></span>}
-                </div>
+                {tumbler
+                  ? <TumblerViewer state={vehicleState} receivedAt={bridge.telemetryReceivedAt}
+                    vehicleName={vehicleName} modelNumber={modelNumber} developerMode={showDebug} />
+                  : <>
+                    <div className="vehicle-art"><VehicleIllustration connected={ready} /></div>
+                    <div className="vehicle-card__bottom">
+                      <div className="vehicle-name">
+                        <p className="eyebrow">{modelNumber ? `MODEL ${modelNumber}` : "YOUR BUILD"}</p>
+                        <h2>{vehicleName}</h2>
+                        <p>Built for a real-world adventure.</p>
+                      </div>
+                      <span className="vehicle-card__motif" aria-hidden="true"><i /><i /><i /></span>
+                    </div>
+                  </>}
               </section>
 
               <section

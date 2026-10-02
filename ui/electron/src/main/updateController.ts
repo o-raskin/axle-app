@@ -18,6 +18,8 @@ export function isNewerVersion(candidate: string, current: string): boolean {
 }
 
 export function manualRelease(value: unknown, platform: string, arch: string): { version: string; url: string } | null {
+  if ((platform !== "darwin" || !["arm64", "x64"].includes(arch))
+    && (platform !== "linux" || arch !== "x64")) return null;
   if (!value || typeof value !== "object") return null;
   const release = value as { draft?: unknown; prerelease?: unknown; tag_name?: unknown; assets?: unknown };
   if (release.draft !== false || release.prerelease !== false || typeof release.tag_name !== "string") return null;
@@ -92,7 +94,7 @@ export class UpdateController {
       await deps.engine.download();
       // Downloading is allowed in the background, but never interrupt a new drive.
       if (deps.isDriving()) return;
-      if (!await deps.consent("install", version)) return;
+      if (!await deps.consent("install", version) || deps.isDriving()) return;
       // Block new bridge sessions and complete motor cleanup before the installer runs.
       await deps.prepareInstall();
       deps.engine.install();

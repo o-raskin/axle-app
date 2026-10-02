@@ -1,4 +1,4 @@
-import { readFile, writeFile, rename } from 'node:fs/promises';
+import { mkdtemp, readFile, writeFile, rename, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { extractTumblerSourceBundle, packTumblerSourceBundle, readTumblerSourceBundle } from './tumbler-source-bundle.mjs';
@@ -42,9 +42,14 @@ if (action === 'extract') {
     contents: ['42239.io', '42239.mpd', 'custom/', 'ldraw/', 'ARCHIVE-NOTICE.md'],
     preservation: 'Lossless container; original source bytes, author/license headers and LDraw agreements are retained.'
   };
-  const temporary = `${provenancePath}.partial`;
-  await writeFile(temporary, `${JSON.stringify(provenance, null, 2)}\n`);
-  await rename(temporary, provenancePath);
+  const temporaryDirectory = await mkdtemp(path.join(root, '.provenance-'));
+  try {
+    const temporary = path.join(temporaryDirectory, 'provenance.json');
+    await writeFile(temporary, `${JSON.stringify(provenance, null, 2)}\n`, { flag: 'wx' });
+    await rename(temporary, provenancePath);
+  } finally {
+    await rm(temporaryDirectory, { recursive: true, force: true });
+  }
   console.log(`Packed ${bundle.files.size - 1} CAD/library files and their rights notice: ${bundle.bytes} bytes, SHA256 ${bundle.sha256}.`);
   console.log('After editing third-party sources, document the changes in provenance.json and rebuild the model. Original-source hash checks remain enforced.');
 }

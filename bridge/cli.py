@@ -43,15 +43,20 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="LEGO Technic gamepad bridge. Run with no arguments to start live control."
     )
-    parser.add_argument("--arm", action="store_true", help="Live control with hub (default)")
-    parser.add_argument("--probe", action="store_true", help="Log gamepad axes/buttons without connecting to the hub")
-    parser.add_argument("--gamepad-devices", action="store_true", help="Print SDL/Pygame gamepad diagnostics and exit")
-    parser.add_argument("--scan-hub", action="store_true", help="Scan the hub and save the car port map")
-    parser.add_argument(
+    operation = parser.add_mutually_exclusive_group()
+    operation.add_argument("--arm", action="store_true", help="Live control with hub (default)")
+    operation.add_argument(
+        "--probe", action="store_true", help="Log gamepad axes/buttons without connecting to the hub"
+    )
+    operation.add_argument(
+        "--gamepad-devices", action="store_true", help="Print SDL/Pygame gamepad diagnostics and exit"
+    )
+    operation.add_argument("--scan-hub", action="store_true", help="Scan the hub and save the car port map")
+    operation.add_argument(
         "--discover", action="store_true", help="Passively detect nearby hardware (JSONL frontend only)"
     )
-    parser.add_argument("--profiles-json", action="store_true", help="Print available profiles as JSON and exit")
-    parser.add_argument(
+    operation.add_argument("--profiles-json", action="store_true", help="Print available profiles as JSON and exit")
+    operation.add_argument(
         "--audio-devices",
         action="store_true",
         help="List audio outputs and selected reverse beep device",
@@ -108,12 +113,13 @@ async def run_human_frontend(args: argparse.Namespace) -> None:
 
 def argv_requests_jsonl(argv: Sequence[str]) -> bool:
     """Return whether raw argv selected the JSONL frontend."""
+    jsonl = False
     for index, value in enumerate(argv):
         if value == "--frontend" and index + 1 < len(argv):
-            return argv[index + 1] == "jsonl"
+            jsonl = argv[index + 1] == "jsonl"
         if value.startswith("--frontend="):
-            return value.split("=", 1)[1] == "jsonl"
-    return False
+            jsonl = value.split("=", 1)[1] == "jsonl"
+    return jsonl
 
 
 def run(argv: Sequence[str] | None = None) -> int:

@@ -2,19 +2,22 @@ const assert = require("node:assert/strict");
 const path = require("node:path");
 const { test } = require("node:test");
 const vm = require("node:vm");
+const { vmCoverageFilename } = require("./helpers/vm-coverage.cjs");
 const { buildSync } = require("esbuild");
 
 const compiled = buildSync({
   entryPoints: [path.join(__dirname, "../src/main/bridgeProcessService.ts")],
-  bundle: true, platform: "node", format: "cjs", write: false, external: ["electron"]
+  bundle: true, platform: "node", format: "cjs", write: false, external: ["electron"],
+  sourcemap: "inline", sourceRoot: `${path.resolve(__dirname, "../")}/`,
+  absWorkingDir: path.resolve(__dirname, "../")
 }).outputFiles[0].text;
 
 function serviceHarness() {
-  const execute = vm.runInNewContext(`(function(require, module, exports) { ${compiled}\n})`, {
-    console, process, Date, setTimeout, clearTimeout
-  });
   const module = { exports: {} };
-  execute((id) => id === "electron" ? { app: {} } : require(id), module, module.exports);
+  vm.runInNewContext(compiled, {
+    require: (id) => id === "electron" ? { app: {} } : require(id), module, exports: module.exports,
+    console, process, Date, setTimeout, clearTimeout
+  }, { filename: vmCoverageFilename(compiled, path.join(__dirname, "../src/main/bridgeProcessService.ts.cjs")) });
   const events = [];
   const starts = [];
   const service = new module.exports.BridgeProcessService({
@@ -82,11 +85,11 @@ test("a diagnostic waits for background discovery to close before starting", asy
 });
 
 test("shutdown guard also rejects a startup already awaiting its profile catalog", async () => {
-  const execute = vm.runInNewContext(`(function(require, module, exports) { ${compiled}\n})`, {
-    console, process, Date, setTimeout, clearTimeout
-  });
   const module = { exports: {} };
-  execute((id) => id === "electron" ? { app: {} } : require(id), module, module.exports);
+  vm.runInNewContext(compiled, {
+    require: (id) => id === "electron" ? { app: {} } : require(id), module, exports: module.exports,
+    console, process, Date, setTimeout, clearTimeout
+  }, { filename: vmCoverageFilename(compiled, path.join(__dirname, "../src/main/bridgeProcessService.ts.cjs")) });
   let allowed = true;
   const service = new module.exports.BridgeProcessService({
     canStart: () => allowed, publishLog() {}, publishStatus() {}, publishEvent() {}

@@ -1,17 +1,18 @@
 import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { Icon } from "./Icon";
 
 import { VEHICLE_FEEDBACK_MAX_AGE_MS, type VehicleVisualState } from "../lib/vehicleState";
 import { createTumblerModel, steeringYawForCommand, type TumblerModel } from "../vehicle/tumblerModel";
 import { WheelMotion } from "../vehicle/wheelMotion";
 import {
-  automaticCameraIntent, CAMERA_SHOTS, CAMERA_INTENT_DWELL_MS, CAMERA_IDLE_DWELL_MS,
+  automaticCameraIntent, CAMERA_SHOTS, CAMERA_INTENT_DWELL_MS, CAMERA_IDLE_DWELL_MS, CAMERA_FRAMING_MIN_ASPECT,
   nearestOrbitAngle, stepCameraSpring, type CameraIntent, type CameraView
 } from "../vehicle/tumblerCamera";
 
 type ViewerController = { view: (part: CameraView) => void; refresh: () => void };
-type Props = { state: VehicleVisualState; receivedAt: number | null };
+type Props = { state: VehicleVisualState; receivedAt: number | null; vehicleName: string; modelNumber?: string; developerMode: boolean };
 
 const views: Array<{ id: CameraView; label: string }> = [
   { id: "overview", label: "Overview" },
@@ -23,9 +24,10 @@ const views: Array<{ id: CameraView; label: string }> = [
   { id: "boost", label: "Boost" }
 ];
 
-export function TumblerViewer({ state, receivedAt }: Props) {
+export function TumblerViewer({ state, receivedAt, vehicleName, modelNumber, developerMode }: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
   const controllerRef = useRef<ViewerController | null>(null);
+  const cameraMenuRef = useRef<HTMLDetailsElement>(null);
   const feedbackRef = useRef({ state, receivedAt });
   const followRef = useRef(true);
   const [available, setAvailable] = useState(true);
@@ -33,6 +35,15 @@ export function TumblerViewer({ state, receivedAt }: Props) {
   const [follow, setFollow] = useState(true);
   const [cameraView, setCameraView] = useState<CameraView>("overview");
   const [reducedMotion, setReducedMotion] = useState(false);
+
+  useEffect(() => {
+    function dismissOutside(event: PointerEvent) {
+      const menu = cameraMenuRef.current;
+      if (menu?.open && event.target instanceof Node && !menu.contains(event.target)) menu.open = false;
+    }
+    document.addEventListener("pointerdown", dismissOutside);
+    return () => document.removeEventListener("pointerdown", dismissOutside);
+  }, []);
 
   useEffect(() => {
     feedbackRef.current = { state, receivedAt };
@@ -115,6 +126,7 @@ export function TumblerViewer({ state, receivedAt }: Props) {
 
     let animationFrame = 0;
     let destroyed = false;
+    let cleanedUp = false;
     let intersecting = true;
     let lastTime = 0;
     let candidateView: CameraView = "overview";
@@ -142,6 +154,7 @@ export function TumblerViewer({ state, receivedAt }: Props) {
       freeOrbit = false;
       const view = CAMERA_SHOTS[part];
       const target = model?.cameraTargets[view.focus].clone() ?? new THREE.Vector3(0, 1.074, 0);
+      target.y += view.targetYOffset ?? 0;
       const destination = new THREE.Spherical().setFromVector3(new THREE.Vector3().fromArray(view.offset));
       if (intent) {
         // Move toward a side view while steering, without swapping camera sides
@@ -153,7 +166,7 @@ export function TumblerViewer({ state, receivedAt }: Props) {
         destination.radius *= 1 + turn * 0.08 + (intent.moving ? 0.03 : 0);
       }
       // Preserve framing on a narrow window and at larger text zoom.
-      destination.radius = THREE.MathUtils.clamp(destination.radius * Math.max(1, 1.3 / camera.aspect), controls.minDistance, controls.maxDistance);
+      destination.radius = THREE.MathUtils.clamp(destination.radius * Math.max(1, CAMERA_FRAMING_MIN_ASPECT / camera.aspect), controls.minDistance, controls.maxDistance);
       destination.phi = THREE.MathUtils.clamp(destination.phi, controls.minPolarAngle, controls.maxPolarAngle);
       controls.update();
       if (!transition) {
@@ -335,8 +348,7 @@ export function TumblerViewer({ state, receivedAt }: Props) {
     function contextLost(event: Event) {
       event.preventDefault();
       setAvailable(false);
-      destroyed = true;
-      cancelAnimationFrame(animationFrame);
+      cleanup();
     }
     const resizeObserver = new ResizeObserver(resize);
     resizeObserver.observe(host);
@@ -367,10 +379,15 @@ export function TumblerViewer({ state, receivedAt }: Props) {
       chooseView("overview");
       schedule();
     }).catch(() => {
-      if (!destroyed) setAvailable(false);
+      if (!destroyed) {
+        setAvailable(false);
+        cleanup();
+      }
     });
 
-    return () => {
+    function cleanup() {
+      if (cleanedUp) return;
+      cleanedUp = true;
       destroyed = true;
       cancelAnimationFrame(animationFrame);
       controllerRef.current = null;
@@ -384,56 +401,100 @@ export function TumblerViewer({ state, receivedAt }: Props) {
       controls.removeEventListener("change", schedule);
       controls.dispose();
       model?.dispose();
+      model = null;
+      scene.clear();
       groundGeometry.dispose();
       groundMaterial.dispose();
       key.shadow.dispose();
       renderer.dispose();
       renderer.forceContextLoss();
       canvas.remove();
-    };
+    }
+    return cleanup;
   }, []);
 
   function selectView(view: CameraView) {
     setFollow(false);
     followRef.current = false;
     controllerRef.current?.view(view);
+    closeCameraMenu();
   }
+
+  function closeCameraMenu() {
+    if (!cameraMenuRef.current) return;
+    cameraMenuRef.current.open = false;
+    cameraMenuRef.current.querySelector("summary")?.focus({ preventScroll: true });
+  }
+
+  const currentViewLabel = views.find((view) => view.id === cameraView)?.label ?? "Combined";
 
   return (
     <div className="tumbler-viewer" data-live={state.live} data-active-part={state.activePart ?? ""} data-camera-view={cameraView}>
-      <div className="tumbler-viewer__stage" ref={hostRef} hidden={!available} />
-      {available && !loaded && <p className="tumbler-viewer__loading" role="status">Loading your Tumbler…</p>}
-      {!available && (
-        <div className="tumbler-viewer__fallback" role="status">
-          <strong>3D preview unavailable</strong>
-          <p>The model could not be displayed. You can still connect and drive.</p>
+      <div className="vehicle-art">
+        <div className="tumbler-viewer__viewport">
+          <div className="tumbler-viewer__stage" ref={hostRef} hidden={!available} />
+          {available && !loaded && <p className="tumbler-viewer__loading" role="status">Loading your Tumbler…</p>}
+          {!available && (
+            <div className="tumbler-viewer__fallback" role="status">
+              <strong>3D preview unavailable</strong>
+              <p>The model could not be displayed. You can still connect and drive.</p>
+            </div>
+          )}
         </div>
-      )}
-      <div className="tumbler-viewer__info">
-        <span className={`tumbler-feedback ${state.live ? "tumbler-feedback--live" : ""}`} role="status">
-          <i aria-hidden="true" />{state.statusLabel}
-        </span>
-        <span id="tumbler-view-help">Drag to orbit · Scroll to zoom<span className="sr-only">. Keyboard: arrow keys orbit, plus and minus zoom, Home resets the view.</span></span>
+        <span id="tumbler-view-help" className="sr-only">Drag to orbit, scroll to zoom. Keyboard: arrow keys orbit, plus and minus zoom, Home resets the view.</span>
+        {developerMode && <div className="tumbler-viewer__diagnostics">
+          <div className="tumbler-viewer__info">
+            <span className={`tumbler-feedback ${state.live ? "tumbler-feedback--live" : ""}`} role="status">
+              <i aria-hidden="true" />{state.statusLabel}
+            </span>
+          </div>
+          <p className="tumbler-viewer__note">{state.live ? state.wheelPosition
+            ? "Wheels follow measured drivetrain movement. Steering and lights follow controls."
+            : "Wheel animation starts when the car reports movement."
+            : "Connect your Tumbler to see its controls in motion."}</p>
+        </div>}
       </div>
-      <div className="tumbler-viewer__toolbar">
-        <div className="tumbler-viewer__views" role="group" aria-label="Vehicle camera views">
-          {views.map(({ id, label }) => (
-            <button key={id} type="button" disabled={!available || !loaded} aria-pressed={cameraView === id}
-              className={state.activePart === id ? "tumbler-view--active" : ""} onClick={() => selectView(id)}>{label}</button>
-          ))}
+      <div className="vehicle-card__bottom">
+        <div className="vehicle-name">
+          <p className="eyebrow">{modelNumber ? `MODEL ${modelNumber}` : "YOUR BUILD"}</p>
+          <div className="vehicle-name__row">
+            <h2>{vehicleName}</h2>
+            <details className="tumbler-viewer__toolbar" ref={cameraMenuRef}
+              onKeyDown={(event) => {
+                if (event.key === "Escape" && cameraMenuRef.current?.open) {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  closeCameraMenu();
+                }
+              }}>
+              <summary aria-label="Camera views" aria-disabled={!available || !loaded}
+                title={`Camera view: ${currentViewLabel}`}
+                onClick={(event) => { if (!available || !loaded) event.preventDefault(); }}>
+                <span>View</span>
+                {follow && !reducedMotion && <span className="tumbler-viewer__auto" aria-hidden="true">Auto</span>}
+                <Icon name="chevron" size={16} />
+              </summary>
+              <div className="tumbler-viewer__camera-panel">
+                <p className="tumbler-viewer__camera-heading">Camera views <span>{currentViewLabel}</span></p>
+                <div className="tumbler-viewer__views" role="group" aria-label="Vehicle camera views">
+                  {views.map(({ id, label }) => (
+                    <button key={id} type="button" disabled={!available || !loaded} aria-pressed={cameraView === id}
+                      className={state.activePart === id ? "tumbler-view--active" : ""} onClick={() => selectView(id)}>{label}</button>
+                  ))}
+                </div>
+                <label className="tumbler-follow">
+                  <input type="checkbox" checked={follow && !reducedMotion} disabled={!available || !loaded || reducedMotion}
+                    onChange={(event) => setFollow(event.target.checked)} />
+                  Follow active part
+                </label>
+                <p className="tumbler-viewer__camera-help">{reducedMotion
+                  ? "Automatic views paused for reduced motion."
+                  : "Drag to orbit · Scroll to zoom"}</p>
+              </div>
+            </details>
+          </div>
         </div>
-        <label className="tumbler-follow">
-          <input type="checkbox" checked={follow && !reducedMotion} disabled={!available || !loaded || reducedMotion}
-            onChange={(event) => setFollow(event.target.checked)} />
-          Follow active part
-        </label>
       </div>
-      <p className="tumbler-viewer__note">{reducedMotion
-        ? "Automatic views paused for reduced motion."
-        : state.live ? state.wheelPosition
-          ? "Wheels follow measured drivetrain movement. Steering and lights follow controls."
-          : "Wheel animation starts when the car reports movement."
-          : "Connect your Tumbler to see its controls in motion."}</p>
     </div>
   );
 }

@@ -24,7 +24,8 @@ Set up the Python bridge from the repository root first, using Python 3.9 or new
 ```bash
 python3 -m venv lego-env
 source lego-env/bin/activate
-pip install -r requirements.txt
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
 ```
 
 Then launch Electron with Node.js 24 LTS (24.12 or newer):
@@ -50,8 +51,8 @@ On launch, Axle automatically starts the supported Tumbler connection flow: wait
 Bluetooth, searches for the controller and hub, calibrates PLAYVM, then starts live
 control. Keep the car stationary and its wheels clear during setup. Device loss stops
 motors; the bridge waits and reconnects without a button. If the worker exits, the app
-retries after a short delay. The vehicle picker stays available throughout the flow,
-and Settings also contains the model selection. Only Tumbler is exposed in the desktop
+retries after a short delay. Model selection is available in Settings throughout the flow.
+Only Tumbler is exposed in the desktop
 UI for now; terminal profiles remain unchanged. Selection and connection-setting changes
 stop the old worker before starting the latest selection, including during setup.
 
@@ -85,7 +86,13 @@ Read the [model license](models/tumbler/LICENSE.md), [rights gaps](models/tumble
 and generated part attribution before redistributing; these records also accompany
 the packaged desktop app. Unidentified Studio geometry and underlying brand/design
 rights have not been independently cleared.
-Drag to orbit, scroll to zoom, or choose a close view; keyboard arrows, plus/minus and Home also
+The compact **View** menu beside the vehicle name contains part views and **Follow active part**.
+It opens upward, leaving the 3D preview unobstructed when closed; **Auto** indicates that following is enabled.
+The compact vehicle footer contains the model name and View control; wheel-feedback messages
+and detailed preview notes appear only in Developer mode. Orbit/zoom help lives inside View.
+The default overview and active-part shots are closer, with lower chase views for driving
+and boost; narrow windows pull the camera back to preserve framing. Drag to orbit, scroll to zoom,
+or choose a close view; keyboard arrows, plus/minus and Home also
 control the camera. **Follow active part** is enabled by default and moves smoothly between
 cinematic views: rear chase for driving/boost, a left-side view revealing the flashing rear
 green light when reversing, and a wide
@@ -185,7 +192,7 @@ as setup finishes. Use Exit to stop control and close the app.
 `--disable-hardware-discovery` disables automatic hardware startup for isolated/offline
 test runs; it does not permit motor control.
 
-The vehicle card and Settings offer the supported model picker. Settings contains
+Settings contains the supported model picker,
 controller selection, fullscreen preference, and Advanced connection overrides. Automatic
 controller detection is the default. Diagnostics is an explicit opt-in surface
 for hub scanning, controller/audio reports, the input probe, raw events, and logs. It preserves the

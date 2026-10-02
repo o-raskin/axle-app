@@ -10,6 +10,8 @@ from contextlib import suppress
 from functools import partial
 from typing import Any, Callable
 
+from bleak.exc import BleakError
+
 POSITION_BYTES = 4
 MAX_AGE_S = 0.3
 PAIR_SKEW_S = 0.05
@@ -38,26 +40,31 @@ class WheelFeedback:
         self.rest_since: float | None = None
         self.direction = 0
         self.direction_since = 0.0
-        self.can_learn = False
         self.signs: tuple[int, ...] | None = None
         self.evidence: list[tuple[int, ...]] = []
         self.position = 0.0
 
     async def start(self) -> None:
         """Observe the calibrated, neutral drivetrain before accepting drive input."""
-        self.task = asyncio.create_task(self._read())
+        if self.task is None or self.task.done():
+            self.task = asyncio.create_task(self._read())
         try:
-            async with asyncio.timeout(STARTUP_WARMUP_S):
-                while not self.task.done():
-                    now = time.monotonic()
-                    self.sample(0, False, now)
-                    if self.rest_since is not None and now - self.rest_since >= REST_S:
-                        return
-                    await asyncio.sleep(0.01)
-        except TimeoutError:
+            # Development can use Python 3.9; asyncio.timeout requires 3.11.
+            # Only cancel the warmup on timeout, leaving optional reads alive.
+            await asyncio.wait_for(self._observe_rest(), timeout=STARTUP_WARMUP_S)
+        except asyncio.TimeoutError:
             # Driving remains usable when encoder reads are unavailable. The
-            # reader keeps retrying; a later standstill can establish polarity.
+            # reader keeps retrying and later measured motion can establish
+            # polarity without requiring a second trigger press.
             self.log("Wheel feedback is still starting; encoder reads will retry in the background.")
+
+    async def _observe_rest(self) -> None:
+        while self.task is not None and not self.task.done():
+            now = time.monotonic()
+            self.sample(0, False, now)
+            if self.rest_since is not None and now - self.rest_since >= REST_S:
+                return
+            await asyncio.sleep(0.01)
 
     async def close(self) -> None:
         """Cancel optional reads before the hub is shut down."""
@@ -77,9 +84,11 @@ class WheelFeedback:
         return bool(self.hub.input_modes.get(port) == mode)
 
     async def _until(self, predicate: Callable[[], bool]) -> None:
-        async with asyncio.timeout(READ_TIMEOUT_S):
+        async def wait_until() -> None:
             while not predicate():
                 await asyncio.sleep(0.01)
+
+        await asyncio.wait_for(wait_until(), timeout=READ_TIMEOUT_S)
 
     async def _mode_field(self, port: int, mode: int, field: str, kind: int) -> None:
         if not self._has_mode_field(port, mode, field):
@@ -136,7 +145,7 @@ class WheelFeedback:
                     # stationary positions. Never send motor output commands.
                     await asyncio.wait_for(self.hub.request_port_info(port, 0), timeout=READ_TIMEOUT_S)
                 await asyncio.sleep(READ_RETRY_S)
-            except (OSError, RuntimeError, TimeoutError) as exc:
+            except (OSError, RuntimeError, asyncio.TimeoutError, BleakError) as exc:
                 if not retry_announced:
                     self.log(f"Wheel encoder read delayed; retrying ({type(exc).__name__}: {exc}).")
                     retry_announced = True
@@ -162,7 +171,6 @@ class WheelFeedback:
         if now - at > MAX_AGE_S:
             self.previous = None
             self.rest_since = None
-            self.can_learn = False
             return None
         if max(timestamps) - at > PAIR_SKEW_S:
             # BLE delivers the two port replies separately. A brief incomplete
@@ -172,7 +180,9 @@ class WheelFeedback:
         positions = tuple(int.from_bytes(sample[1], "little", signed=True) for sample in samples)
         direction = 1 if throttle > 0 or (boost and throttle == 0) else -1 if throttle < 0 else 0
         if direction != self.direction:
-            self.can_learn = direction != 0 and self.rest_since is not None and now - self.rest_since >= REST_S
+            # Encoder discovery can finish after the first trigger press. The
+            # first paired sample then becomes the baseline; polarity still
+            # comes from two stable measured deltas, never from throttle speed.
             self.direction = direction
             self.direction_since = now
             self.evidence.clear()
@@ -184,16 +194,12 @@ class WheelFeedback:
                         self.rest_since = at
                 else:
                     self.rest_since = None
-                    if (
-                        self.signs is None
-                        and self.can_learn
-                        and direction
-                        and now - self.direction_since >= DIRECTION_S
-                    ):
+                    if self.signs is None and direction and now - self.direction_since >= DIRECTION_S:
                         if all(delta != 0 for delta in deltas):
                             signs = tuple(direction * (1 if delta > 0 else -1) for delta in deltas)
                             self.evidence.append(signs)
-                            if len(self.evidence) >= SIGN_SAMPLES and self.evidence[-1] == self.evidence[-2]:
+                            self.evidence = self.evidence[-SIGN_SAMPLES:]
+                            if len(self.evidence) == SIGN_SAMPLES and all(item == signs for item in self.evidence):
                                 self.signs = signs
                     if self.signs is not None:
                         self.position += (
