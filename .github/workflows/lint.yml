@@ -111,10 +111,13 @@ jobs:
       - name: Install display dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends xvfb libgtk-3-0 libnss3 libasound2 libgbm1
+          sudo apt-get install -y --no-install-recommends xvfb libgtk-3-0 libnss3 libasound2 libgbm1 libgl1-mesa-dri libgl1-mesa-glx
       - name: Verify UI flows in Electron
         env:
           AXLE_AUDIT_DIR: ${{ github.workspace }}/ui/electron/test-results
+          AXLE_UI_SOFTWARE_GL: '1'
+          LIBGL_ALWAYS_SOFTWARE: '1'
+          LP_NUM_THREADS: '4'
         run: xvfb-run --auto-servernum npm run test:ui
       - name: Retain UI failure evidence
         if: failure()
@@ -218,7 +221,7 @@ jobs:
           weston --backend=headless-backend.so --socket=wayland-axle --idle-time=0 &
           weston_pid=$!
           trap 'kill "$weston_pid" 2>/dev/null || true; wait "$weston_pid" 2>/dev/null || true; rm -rf "$runtime_dir"' EXIT
-          for attempt in {1..50}; do
+          for ((attempt = 0; attempt < 50; attempt++)); do
             if test -S "$runtime_dir/wayland-axle"; then break; fi
             kill -0 "$weston_pid"
             sleep 0.1

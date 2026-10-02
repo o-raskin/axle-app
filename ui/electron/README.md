@@ -265,6 +265,15 @@ npm run test:ui
 npm run test:package   # after packaging; optionally pass an installed executable path
 ```
 
+For headless Linux, install Xvfb and Mesa (`libgl1-mesa-dri`, `libgl1-mesa-glx`), then run
+`AXLE_UI_SOFTWARE_GL=1 LIBGL_ALWAYS_SOFTWARE=1 xvfb-run --auto-servernum npm run test:ui`.
+This uses an isolated software OpenGL fixture at half pixel density while retaining
+the production geometry, textures, shadows, volumetric lighting and CSS layout checks.
+These CI-only Electron launch flags are never passed to the packaged application.
+The renderer also recognizes CPU rasterizers in ordinary app sessions and limits
+their 3D pixel density to 0.25 and shadow maps to 512×512 to keep controls responsive. Hardware GPUs,
+including Steam Deck's Radeon, retain the detailed rendering budget.
+
 Run Python checks from the repository root:
 
 ```bash

@@ -12,6 +12,7 @@ import { createTumblerSignals, type TumblerSignals } from "../vehicle/tumblerSig
 import { createTumblerRendering } from "../vehicle/tumblerRendering";
 import { installTumblerSoftShadows } from "../vehicle/tumblerShadows";
 import { TumblerShadowCache } from "../vehicle/tumblerShadowCache";
+import { tumblerGraphicsBudget } from "../vehicle/tumblerGraphics";
 import {
   automaticCameraIntent, CAMERA_SHOTS, CAMERA_INTENT_DWELL_MS, CAMERA_IDLE_DWELL_MS, CAMERA_FRAMING_MIN_ASPECT,
   nearestOrbitAngle, stepCameraSpring, type CameraIntent, type CameraView
@@ -82,7 +83,10 @@ export function TumblerViewer({ state, receivedAt, vehicleName, modelNumber, dev
       setAvailable(false);
       return;
     }
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+    const gl = renderer.getContext();
+    const debug = gl.getExtension("WEBGL_debug_renderer_info");
+    const graphics = tumblerGraphicsBudget(debug ? gl.getParameter(debug.UNMASKED_RENDERER_WEBGL) : null);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, graphics.maxPixelRatio));
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.12;
@@ -117,6 +121,9 @@ export function TumblerViewer({ state, receivedAt, vehicleName, modelNumber, dev
     const streetScene = createTumblerStreet(scene);
     const rendering = createTumblerRendering(renderer, scene, camera);
     const key = scene.getObjectByName("Tumbler cinematic shadow key") as THREE.DirectionalLight;
+    key.shadow.mapSize.set(graphics.shadowMapSize, graphics.shadowMapSize);
+    canvas.dataset.softwareGraphics = String(graphics.software);
+    canvas.dataset.shadowMapSize = String(graphics.shadowMapSize);
     const softShadows = installTumblerSoftShadows(scene, key);
     const shadowCache = new TumblerShadowCache();
     let signals: TumblerSignals | null = null;
@@ -222,7 +229,10 @@ export function TumblerViewer({ state, receivedAt, vehicleName, modelNumber, dev
       if (!model) return;
       // Limit rendering to 30 fps on battery-powered devices.
       if (lastTime && time - lastTime < 32) { schedule(); return; }
-      const dt = Math.min((time - (lastTime || time)) / 1000, 0.05);
+      // Both damping functions are stable for the full elapsed interval. A
+      // physics-style timestep cap made camera moves take tens of seconds on
+      // software GPUs; wheel travel already uses its own measured clock.
+      const dt = Math.max((time - (lastTime || time)) / 1000, 0);
       lastTime = time;
       const feedback = feedbackRef.current;
       const age = feedback.receivedAt === null ? Infinity : Date.now() - feedback.receivedAt;
@@ -342,6 +352,9 @@ export function TumblerViewer({ state, receivedAt, vehicleName, modelNumber, dev
       canvas.dataset.braking = String(fresh && current.brake);
       if (transition || pendingIntent || cameraChanged || Math.abs(steering - targetSteering) > 0.0001
         || (fresh && !reduce && (wheelMotion.pending || current.attack || current.boost))) schedule();
+      // On-demand rendering can sleep indefinitely. Do not count that idle
+      // time as part of the next camera transition or steering interpolation.
+      if (!animationFrame) lastTime = 0;
     }
     function schedule() {
       if (!destroyed && !animationFrame && !document.hidden && intersecting) animationFrame = requestAnimationFrame(frame);

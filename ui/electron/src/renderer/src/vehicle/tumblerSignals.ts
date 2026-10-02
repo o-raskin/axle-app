@@ -13,6 +13,11 @@ export function createTumblerSignals(scene: THREE.Scene, model: TumblerModel,
   options: { volumetric?: boolean } = {}): TumblerSignals {
   const root = new THREE.Group();
   root.name = "Tumbler signal effects";
+  // Keep the lit shader's projector count constant across lamp phases and
+  // reflection passes. Hiding a light with its optical effects caused expensive
+  // shader recompilation on software GPUs; zero intensity is already dark.
+  const projectorRoot = new THREE.Group();
+  projectorRoot.name = "Tumbler headlight projectors";
   const geometry = new Set<THREE.BufferGeometry>();
   const materials = new Set<THREE.Material>();
   const radialSize = 256;
@@ -138,7 +143,7 @@ void main() {
     light.position.copy(anchor);
     light.target.position.copy(target);
     light.castShadow = false;
-    headlights.add(light, light.target);
+    projectorRoot.add(light, light.target);
     projectors.push(light);
     brightness.get(headlights)!.push((value) => { light.intensity = value * 30; });
   }
@@ -194,7 +199,7 @@ void main() {
     jet(anchor);
     pool(boost, new THREE.Vector3(anchor.x, poolY, anchor.z - 0.5), "#f88732", 1, 1.4, 0.24);
   }
-  scene.add(root);
+  scene.add(root, projectorRoot);
 
   function setSignal(group: THREE.Group, input: number): void {
     const value = Number.isFinite(input) ? THREE.MathUtils.clamp(input, 0, 1) : 0;
@@ -214,6 +219,8 @@ void main() {
       disposed = true;
       root.removeFromParent();
       root.clear();
+      projectorRoot.removeFromParent();
+      projectorRoot.clear();
       geometry.forEach((resource) => resource.dispose());
       materials.forEach((resource) => resource.dispose());
       projectors.forEach((light) => light.dispose());

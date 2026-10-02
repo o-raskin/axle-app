@@ -24,10 +24,10 @@ function fixture(options: { volumetric?: boolean } = {}) {
 }
 
 test("volumetric lighting replaces cheap headlight cones while retaining exact live sources and signal optics", () => {
-  const { effects, root, groups } = fixture({ volumetric: true });
+  const { effects, scene, root, groups } = fixture({ volumetric: true });
   try {
     const projectors: THREE.SpotLight[] = [];
-    root.traverse((object) => {
+    scene.traverse((object) => {
       assert.ok(!object.name.includes("short scattering beam"), "Fog cannot be rendered twice by both cones and ray marching");
       if (object instanceof THREE.SpotLight) projectors.push(object);
     });
@@ -45,7 +45,7 @@ test("volumetric lighting replaces cheap headlight cones while retaining exact l
 });
 
 test("signal scattering uses the resolved lamp phase and goes fully dark between reverse and Attack flashes", () => {
-  const { effects, root, groups } = fixture();
+  const { effects, scene, root, groups } = fixture();
   try {
     assert.ok(root.children.every((group) => !group.visible));
     for (const phase of [0, 1, 0, 1, 0]) {
@@ -54,7 +54,7 @@ test("signal scattering uses the resolved lamp phase and goes fully dark between
       assert.equal(groups.green.userData.signal, phase);
       assert.equal(groups.white.userData.signal, 0.6);
       assert.equal(groups.boost.visible, false);
-      groups.white.traverse((object) => {
+      scene.traverse((object) => {
         if (object instanceof THREE.SpotLight) assert.equal(object.intensity, 18);
       });
     }
@@ -63,7 +63,7 @@ test("signal scattering uses the resolved lamp phase and goes fully dark between
     assert.equal(groups.green.userData.signal, 1);
     assert.equal(groups.boost.userData.signal, 0.4);
     effects.update({ white: 0, green: 0, boost: 0 });
-    root.traverse((object) => {
+    scene.traverse((object) => {
       if (object instanceof THREE.SpotLight) assert.equal(object.intensity, 0);
       if (object instanceof THREE.Sprite || object instanceof THREE.Mesh) {
         const material = object.material as THREE.SpriteMaterial | THREE.MeshBasicMaterial | THREE.ShaderMaterial;
@@ -78,7 +78,7 @@ test("signal scattering uses the resolved lamp phase and goes fully dark between
 });
 
 test("signals remain depth tested at all three green optics and keep scattering geometry and projector lights bounded", () => {
-  const { effects, model, root, groups } = fixture();
+  const { effects, scene, model, root, groups } = fixture();
   try {
     const greenHalos = groups.green.children.filter((object) => object instanceof THREE.Sprite);
     assert.equal(greenHalos.length, 3);
@@ -88,7 +88,7 @@ test("signals remain depth tested at all three green optics and keep scattering 
     let triangles = 0;
     let draws = 0;
     let lights = 0;
-    root.traverse((object) => {
+    scene.traverse((object) => {
       if (object instanceof THREE.Light) {
         lights += 1;
         assert.ok(object instanceof THREE.SpotLight, "Only real white headlights need dynamic projector illumination");
@@ -118,10 +118,10 @@ test("signals remain depth tested at all three green optics and keep scattering 
 });
 
 test("white projectors start at the real headlights and shine forward/down with physical distance falloff", () => {
-  const { effects, root, model } = fixture();
+  const { effects, scene, model } = fixture();
   try {
     const projectors: THREE.SpotLight[] = [];
-    root.traverse((object) => { if (object instanceof THREE.SpotLight) projectors.push(object); });
+    scene.traverse((object) => { if (object instanceof THREE.SpotLight) projectors.push(object); });
     projectors.forEach((light, index) => {
       const anchor = model.partAnchors.lights[index];
       assert.equal(light.position.x, anchor.x);
@@ -146,6 +146,30 @@ test("white projectors start at the real headlights and shine forward/down with 
   }
 });
 
+test("lamp phases and hidden reflection optics retain a stable projector layout without light leakage", () => {
+  const { scene, effects, root, groups } = fixture({ volumetric: true });
+  const visibleProjectors = () => {
+    const lights: THREE.SpotLight[] = [];
+    scene.traverseVisible((object) => { if (object instanceof THREE.SpotLight) lights.push(object); });
+    return lights;
+  };
+  try {
+    const initial = visibleProjectors();
+    assert.equal(initial.length, 2);
+    for (const phase of [0, 1, 0, 0.4, 0]) {
+      effects.update({ white: phase, green: phase, boost: phase });
+      assert.deepEqual(visibleProjectors(), initial, "Lamp switching must not change the shader's light count");
+      assert.ok(initial.every((light) => light.intensity === phase * 30));
+      assert.equal(groups.white.visible, phase > 0);
+      // Wet-road reflections hide the scattering optics, but still need real
+      // source illumination and the same lit shader as the beauty pass.
+      root.visible = false;
+      assert.deepEqual(visibleProjectors(), initial);
+      root.visible = true;
+    }
+  } finally { effects.dispose(); }
+});
+
 test("signals release every owned shared geometry, material and procedural texture exactly once", () => {
   const { scene, effects, root } = fixture();
   const resources = new Set<THREE.Material | THREE.BufferGeometry | THREE.Texture>();
@@ -160,7 +184,7 @@ test("signals release every owned shared geometry, material and procedural textu
   });
   const disposals = new Map<object, number>();
   const shadowDisposals = new Map<THREE.SpotLight, number>();
-  root.traverse((object) => {
+  scene.traverse((object) => {
     if (!(object instanceof THREE.SpotLight)) return;
     const disposeShadow = object.shadow.dispose.bind(object.shadow);
     object.shadow.dispose = () => {
@@ -173,6 +197,7 @@ test("signals release every owned shared geometry, material and procedural textu
   effects.dispose();
   effects.update({ white: 1, green: 1, boost: 1 });
   assert.equal(scene.getObjectByName("Tumbler signal effects"), undefined);
+  assert.equal(scene.getObjectByName("Tumbler headlight projectors"), undefined);
   assert.equal(root.children.length, 0);
   for (const resource of resources) assert.equal(disposals.get(resource), 1, "Each resource must be released once on context loss or unmount");
   assert.equal(shadowDisposals.size, 2);
