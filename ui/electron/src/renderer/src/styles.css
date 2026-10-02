@@ -66,12 +66,14 @@ h1 { font-size: clamp(32px, 3.5vw, 44px); font-weight: 650; }
 .vehicle-art { flex: 1; display: flex; align-items: center; justify-content: center; min-height: 244px; position: relative; }
 .vehicle-illustration { display: block; width: 100%; max-height: 330px; filter: drop-shadow(0 14px 12px #00000010); }
 .vehicle-card--3d .vehicle-art { display: block; }
+.vehicle-card--3d { background: #0b111c; }
+.vehicle-card--3d::before { display: none; }
 .vehicle-card--3d .vehicle-card__bottom { padding-block: 12px 20px; flex-wrap: wrap; }
 .vehicle-card--3d .vehicle-name { flex: 1 1 250px; min-width: 0; }
 .tumbler-viewer { flex: 1; display: flex; flex-direction: column; width: 100%; }
 .tumbler-viewer__viewport { position: relative; }
 .tumbler-viewer__loading { position: absolute; top: 130px; left: 0; right: 0; text-align: center; color: #c4cdc5; font-size: 12px; }
-.tumbler-viewer__stage { height: 320px; width: 100%; background: radial-gradient(ellipse at 50% 65%, #a9ba9b14, transparent 70%); }
+.tumbler-viewer__stage { height: 320px; width: 100%; }
 .tumbler-viewer__stage[hidden] { display: none; }
 .tumbler-viewer__stage canvas { width: 100%; height: 100%; display: block; cursor: grab; touch-action: none; }
 .tumbler-viewer__stage canvas:active { cursor: grabbing; }
@@ -81,23 +83,25 @@ h1 { font-size: clamp(32px, 3.5vw, 44px); font-weight: 650; }
 .tumbler-feedback i { width: 5px; height: 5px; border-radius: 50%; background: #a6afa5; }
 .tumbler-feedback--live i { background: #b3dda3; box-shadow: 0 0 7px #b3dda360; }
 .tumbler-viewer__toolbar { position: relative; flex-shrink: 0; z-index: 1; }
-.tumbler-viewer__toolbar > summary { display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 8px 12px; border: 1px solid #627064; border-radius: 10px; background: #29352eeb; color: #e1eadf; font-size: 12px; list-style: none; box-shadow: 0 3px 12px #00000020; }
+.tumbler-viewer__toolbar > summary { display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 8px 12px; border: 1px solid #465a72; border-radius: 10px; background: #19283beb; color: #e4edf8; font-size: 12px; list-style: none; box-shadow: 0 3px 12px #00000020; }
 .tumbler-viewer__toolbar > summary::-webkit-details-marker { display: none; }
 .tumbler-viewer__toolbar > summary[aria-disabled="true"] { opacity: .48; cursor: not-allowed; }
 .tumbler-viewer__toolbar > summary svg { transform: rotate(-90deg); }
 .tumbler-viewer__toolbar[open] > summary svg { transform: rotate(90deg); }
-.tumbler-viewer__auto { font-size: 10px; color: #c4dfb7; }
-.tumbler-viewer__camera-panel { position: absolute; right: 0; bottom: calc(100% + 8px); width: 300px; max-width: calc(100vw - 96px); padding: 12px; border: 1px solid #627064; border-radius: 12px; background: #29352ef5; box-shadow: 0 8px 24px #00000040; }
-.tumbler-viewer__camera-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; color: #e1eadf; font-size: 12px; }
-.tumbler-viewer__camera-heading span { color: #b8c6b8; font-size: 11px; }
-.tumbler-viewer__camera-help { color: #b8c6b8; font-size: 11px; line-height: 1.5; }
+.tumbler-viewer__auto { font-size: 10px; color: #b6d6ef; }
+.tumbler-viewer__camera-panel { position: absolute; right: 0; bottom: calc(100% + 8px); width: 300px; max-width: calc(100vw - 96px); padding: 12px; border: 1px solid #465a72; border-radius: 12px; background: #172539fa; box-shadow: 0 8px 24px #00000040; }
+.tumbler-viewer__camera-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; color: #e4edf8; font-size: 12px; }
+.tumbler-viewer__camera-heading span { color: #adbed0; font-size: 11px; }
+.tumbler-viewer__camera-help { color: #adbed0; font-size: 11px; line-height: 1.5; }
 .tumbler-viewer__views { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 4px; }
-.tumbler-viewer__views button { min-height: 48px; background: #ffffff06; border: 1px solid #5d695e; border-radius: 7px; padding: 5px 9px; color: #d3dbd4; font-size: 12px; }
+.tumbler-viewer__views button { min-height: 48px; background: #ffffff06; border: 1px solid #465a72; border-radius: 7px; padding: 5px 9px; color: #d7e4f2; font-size: 12px; }
 .tumbler-viewer__views button:hover { background: #ffffff17; color: #fff; }
-.tumbler-viewer__views button[aria-pressed="true"] { background: #e1eadc; color: #27342b; border-color: #e1eadc; }
+.tumbler-viewer__views button[aria-pressed="true"] { background: #d8e7f4; color: #172539; border-color: #d8e7f4; }
 .tumbler-viewer__views button.tumbler-view--active { box-shadow: inset 0 -2px #ff925b; }
-.tumbler-follow { display: flex; align-items: center; gap: 8px; min-height: 48px; margin-top: 8px; border-top: 1px solid #627064; font-size: 12px; color: #d3dbd4; cursor: pointer; }
-.tumbler-follow input { accent-color: #c4dfb7; width: 15px; height: 15px; margin: 0; }
+.tumbler-follow, .tumbler-street { display: flex; align-items: center; gap: 8px; min-height: 48px; font-size: 12px; color: #d7e4f2; cursor: pointer; }
+.tumbler-follow { margin-top: 8px; border-top: 1px solid #465a72; }
+.tumbler-follow input, .tumbler-street input { accent-color: #b6d6ef; width: 18px; height: 18px; margin: 0; }
+.vehicle-card--3d .vehicle-name .eyebrow { color: #adbed0; }
 .tumbler-viewer__note { font-size: 10px; color: #bbc6bc; padding: 0 32px 8px; }
 .tumbler-viewer__fallback { min-height: 240px; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 8px; padding: 32px; text-align: center; }
 .tumbler-viewer__fallback p { color: #c1ccc2; max-width: 320px; font-size: 12px; }

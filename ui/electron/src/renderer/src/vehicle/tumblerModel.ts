@@ -9,6 +9,8 @@ export interface TumblerModel {
   frontSteering: THREE.Object3D[];
   wheelSpins: THREE.Object3D[];
   wheelRollRatios: number[];
+  /** Rear tire radius in display units; converts measured radians to road travel. */
+  rearWheelRadius: number;
   lightMaterials: THREE.MeshStandardMaterial[];
   reverseLightMaterials: THREE.MeshStandardMaterial[];
   boostMaterial: THREE.MeshStandardMaterial;
@@ -165,7 +167,8 @@ export function bindTumblerModel(root: THREE.Group): TumblerModel {
   boostAnchor.z = jetBounds.min.z;
   const midpoint = (points: THREE.Vector3[]) => points.reduce((sum, point) => sum.add(point), new THREE.Vector3()).divideScalar(points.length);
   return {
-    root, frontSteering, wheelSpins, wheelRollRatios, lightMaterials: [frontMaterial], reverseLightMaterials, boostMaterial,
+    root, frontSteering, wheelSpins, wheelRollRatios, rearWheelRadius: rollRadius,
+    lightMaterials: [frontMaterial], reverseLightMaterials, boostMaterial,
     partAnchors: { steering: steeringAnchors, drive: driveAnchors, lights: lightAnchors, attack: lightAnchors, boost: [boostAnchor], reverse: reverseAnchors },
     cameraTargets: {
       overview: bounds.getCenter(new THREE.Vector3()),

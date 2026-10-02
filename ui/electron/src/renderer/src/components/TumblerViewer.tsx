@@ -6,6 +6,12 @@ import { Icon } from "./Icon";
 import { VEHICLE_FEEDBACK_MAX_AGE_MS, type VehicleVisualState } from "../lib/vehicleState";
 import { createTumblerModel, steeringYawForCommand, type TumblerModel } from "../vehicle/tumblerModel";
 import { WheelMotion } from "../vehicle/wheelMotion";
+import { createTumblerAtmosphere } from "../vehicle/tumblerAtmosphere";
+import { createTumblerStreet } from "../vehicle/tumblerStreet";
+import { createTumblerSignals, type TumblerSignals } from "../vehicle/tumblerSignals";
+import { createTumblerRendering } from "../vehicle/tumblerRendering";
+import { installTumblerSoftShadows } from "../vehicle/tumblerShadows";
+import { TumblerShadowCache } from "../vehicle/tumblerShadowCache";
 import {
   automaticCameraIntent, CAMERA_SHOTS, CAMERA_INTENT_DWELL_MS, CAMERA_IDLE_DWELL_MS, CAMERA_FRAMING_MIN_ASPECT,
   nearestOrbitAngle, stepCameraSpring, type CameraIntent, type CameraView
@@ -30,9 +36,11 @@ export function TumblerViewer({ state, receivedAt, vehicleName, modelNumber, dev
   const cameraMenuRef = useRef<HTMLDetailsElement>(null);
   const feedbackRef = useRef({ state, receivedAt });
   const followRef = useRef(true);
+  const streetRef = useRef(false);
   const [available, setAvailable] = useState(true);
   const [loaded, setLoaded] = useState(false);
   const [follow, setFollow] = useState(true);
+  const [street, setStreet] = useState(false);
   const [cameraView, setCameraView] = useState<CameraView>("overview");
   const [reducedMotion, setReducedMotion] = useState(false);
 
@@ -59,13 +67,17 @@ export function TumblerViewer({ state, receivedAt, vehicleName, modelNumber, dev
     followRef.current = follow;
     controllerRef.current?.refresh();
   }, [follow]);
+  useEffect(() => {
+    streetRef.current = street;
+    controllerRef.current?.refresh();
+  }, [street]);
 
   useEffect(() => {
     const host = hostRef.current;
     if (!host) return;
     let renderer: THREE.WebGLRenderer;
     try {
-      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: "low-power" });
+      renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "low-power" });
     } catch {
       setAvailable(false);
       return;
@@ -73,11 +85,12 @@ export function TumblerViewer({ state, receivedAt, vehicleName, modelNumber, dev
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.05;
+    renderer.toneMappingExposure = 1.12;
     renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    // The chassis/light are stationary. Reuse the shadow map during orbit and
-    // wheel rolling; refresh it when steering changes the wheel silhouette.
+    // Raw depth enables blocker search for contact-hardening PCSS and volume
+    // occlusion. The material-local filter replaces Basic's hard comparison.
+    renderer.shadowMap.type = THREE.BasicShadowMap;
+    // The shadow cache updates only changed silhouettes, at a bounded cadence.
     renderer.shadowMap.autoUpdate = false;
     const canvas = renderer.domElement;
     canvas.tabIndex = 0;
@@ -100,29 +113,14 @@ export function TumblerViewer({ state, receivedAt, vehicleName, modelNumber, dev
     controls.maxPolarAngle = Math.PI / 2 - 0.035;
     controls.update();
 
-    scene.add(new THREE.HemisphereLight(0xd8e7e5, 0x716656, 2));
-    const key = new THREE.DirectionalLight(0xfff4df, 1.6);
-    key.position.set(4, 7, 5);
-    key.castShadow = true;
-    key.shadow.mapSize.set(1024, 1024);
-    key.shadow.camera.left = key.shadow.camera.bottom = -5;
-    key.shadow.camera.right = key.shadow.camera.top = 5;
-    key.shadow.bias = -0.001;
-    scene.add(key);
-    const rim = new THREE.DirectionalLight(0xc0d1db, 1.4);
-    rim.position.set(-5, 3, -5);
-    scene.add(rim);
-    const fill = new THREE.DirectionalLight(0xe8f2e3, 1);
-    fill.position.set(-4, 2, 6);
-    scene.add(fill);
+    const atmosphere = createTumblerAtmosphere(scene, { reflections: renderer.extensions.has("EXT_color_buffer_float"), photographicLighting: true });
+    const streetScene = createTumblerStreet(scene);
+    const rendering = createTumblerRendering(renderer, scene, camera);
+    const key = scene.getObjectByName("Tumbler cinematic shadow key") as THREE.DirectionalLight;
+    const softShadows = installTumblerSoftShadows(scene, key);
+    const shadowCache = new TumblerShadowCache();
+    let signals: TumblerSignals | null = null;
     let model: TumblerModel | null = null;
-    const groundGeometry = new THREE.CircleGeometry(4.4, 64);
-    const groundMaterial = new THREE.ShadowMaterial({ opacity: 0.25 });
-    const ground = new THREE.Mesh(groundGeometry, groundMaterial);
-    ground.rotation.x = -Math.PI / 2;
-    ground.position.y = -0.025;
-    ground.receiveShadow = true;
-    scene.add(ground);
 
     let animationFrame = 0;
     let destroyed = false;
@@ -139,7 +137,6 @@ export function TumblerViewer({ state, receivedAt, vehicleName, modelNumber, dev
     let wheelRotation = 0;
     const wheelMotion = new WheelMotion();
     let steering = 0;
-    let shadowSteering = NaN;
     let renderedFrames = 0;
     let transition: { orbit: THREE.Spherical; target: THREE.Vector3 } | null = null;
     const orbit = new THREE.Spherical().setFromVector3(camera.position.clone().sub(controls.target));
@@ -242,6 +239,11 @@ export function TumblerViewer({ state, receivedAt, vehicleName, modelNumber, dev
       for (let index = 0; index < model.wheelSpins.length; index += 1) {
         model.wheelSpins[index].rotation.x = wheelRotation * model.wheelRollRatios[index];
       }
+      // The road and haze use the same interpolated encoder travel as the tires.
+      // This never substitutes trigger pressure for measured movement.
+      const travel = wheelRotation * model.rearWheelRadius;
+      atmosphere.update(travel, reduce, streetRef.current);
+      streetScene.setEnabled(streetRef.current);
       const pulsePhase = reduce ? 1 : Math.sin(time * 0.025) ** 2;
       const pulse = 0.4 + 0.6 * pulsePhase;
       const lightIntensity = fresh && current.attack ? 4 * pulse : fresh && current.lights ? 2.4 : 0.04;
@@ -250,7 +252,14 @@ export function TumblerViewer({ state, receivedAt, vehicleName, modelNumber, dev
       // Attack flickers the same three green optical assemblies used by
       // reverse. It takes priority during its active window, then the lamps
       // resume the bridge's resolved reverse phase. Reduced motion stays lit.
-      model.setReverseLights(fresh && (current.attack ? pulsePhase >= 0.5 : current.rocketLights));
+      const greenOn = fresh && (current.attack ? pulsePhase >= 0.5 : current.rocketLights);
+      model.setReverseLights(greenOn);
+      const lampSignals = {
+        white: fresh && (current.attack || current.lights) ? lightIntensity / 4 : 0,
+        green: greenOn ? 1 : 0,
+        boost: fresh && current.boost ? pulse : 0
+      };
+      signals?.update(lampSignals);
 
       let pendingIntent = false;
       if (followRef.current && !reduce) {
@@ -293,11 +302,30 @@ export function TumblerViewer({ state, receivedAt, vehicleName, modelNumber, dev
         }
       }
       const cameraChanged = controls.update();
-      if (!Number.isFinite(shadowSteering) || Math.abs(steering - shadowSteering) > 0.03) {
+      if (streetRef.current) streetScene.update(travel, camera.position);
+      softShadows.update();
+      if (shadowCache.sample(time, {
+        steering, wheelRotation, travel, streetEnabled: streetRef.current,
+        clearance: [streetScene.clearance.x, streetScene.clearance.y]
+      })) {
         renderer.shadowMap.needsUpdate = true;
-        shadowSteering = steering;
       }
-      renderer.render(scene, camera);
+      rendering.render();
+      canvas.dataset.streetScene = String(streetRef.current);
+      canvas.dataset.streetTravel = travel.toFixed(5);
+      canvas.dataset.lampEffects = [lampSignals.white, lampSignals.green, lampSignals.boost].map((value) => value.toFixed(4)).join(",");
+      canvas.dataset.renderCalls = String(rendering.calls);
+      canvas.dataset.renderTriangles = String(rendering.triangles);
+      canvas.dataset.shadowCalls = String(rendering.shadowCalls);
+      canvas.dataset.shadowTriangles = String(rendering.shadowTriangles);
+      canvas.dataset.enhancedGraphics = String(rendering.enhanced);
+      canvas.dataset.volumetricLighting = String(rendering.volumetric);
+      canvas.dataset.softShadowMaterials = String(softShadows.materialCount);
+      canvas.dataset.shadowTechnique = "pcss";
+      canvas.dataset.antialias = rendering.antialias;
+      canvas.dataset.multisampleCount = String(rendering.samples);
+      canvas.dataset.reflectionCalls = String(streetRef.current ? atmosphere.reflectionCalls : 0);
+      canvas.dataset.reflectionTriangles = String(streetRef.current ? atmosphere.reflectionTriangles : 0);
       canvas.dataset.renderedFrames = String(++renderedFrames);
       canvas.dataset.steering = steering.toFixed(4);
       canvas.dataset.wheelRotation = wheelRotation.toFixed(4);
@@ -324,6 +352,8 @@ export function TumblerViewer({ state, receivedAt, vehicleName, modelNumber, dev
       camera.aspect = width / height;
       camera.updateProjectionMatrix();
       renderer.setSize(width, height, false);
+      rendering.resize(width, height);
+      atmosphere.resize(width, height);
       if (!freeOrbit && Math.abs(previousAspect - camera.aspect) > 0.05) chooseView(currentView, poseIntent);
       previousAspect = camera.aspect;
       schedule();
@@ -369,12 +399,22 @@ export function TumblerViewer({ state, receivedAt, vehicleName, modelNumber, dev
     };
     resize();
     chooseView("overview");
+    canvas.dataset.surfaceTexturesReady = "false";
+    void rendering.ready.then(() => { if (!destroyed) schedule(); });
+    void Promise.all([atmosphere.ready, streetScene.ready]).then((ready) => {
+      if (destroyed) return;
+      canvas.dataset.surfaceTexturesReady = String(ready.every(Boolean));
+      schedule();
+    });
     void createTumblerModel().then((vehicle) => {
       if (destroyed) { vehicle.dispose(); return; }
       model = vehicle;
       updateWheelFeedback();
       updateWheelVisibility();
       scene.add(vehicle.root);
+      signals = createTumblerSignals(scene, vehicle, { volumetric: rendering.volumetric });
+      softShadows.refresh();
+      shadowCache.invalidate();
       setLoaded(true);
       chooseView("overview");
       schedule();
@@ -400,12 +440,15 @@ export function TumblerViewer({ state, receivedAt, vehicleName, modelNumber, dev
       controls.removeEventListener("start", pauseFollow);
       controls.removeEventListener("change", schedule);
       controls.dispose();
+      signals?.dispose();
+      signals = null;
+      rendering.dispose();
+      softShadows.dispose();
+      streetScene.dispose();
+      atmosphere.dispose();
       model?.dispose();
       model = null;
       scene.clear();
-      groundGeometry.dispose();
-      groundMaterial.dispose();
-      key.shadow.dispose();
       renderer.dispose();
       renderer.forceContextLoss();
       canvas.remove();
@@ -429,7 +472,7 @@ export function TumblerViewer({ state, receivedAt, vehicleName, modelNumber, dev
   const currentViewLabel = views.find((view) => view.id === cameraView)?.label ?? "Combined";
 
   return (
-    <div className="tumbler-viewer" data-live={state.live} data-active-part={state.activePart ?? ""} data-camera-view={cameraView}>
+    <div className="tumbler-viewer" data-live={state.live} data-active-part={state.activePart ?? ""} data-camera-view={cameraView} data-street-scene={street}>
       <div className="vehicle-art">
         <div className="tumbler-viewer__viewport">
           <div className="tumbler-viewer__stage" ref={hostRef} hidden={!available} />
@@ -486,6 +529,11 @@ export function TumblerViewer({ state, receivedAt, vehicleName, modelNumber, dev
                   <input type="checkbox" checked={follow && !reducedMotion} disabled={!available || !loaded || reducedMotion}
                     onChange={(event) => setFollow(event.target.checked)} />
                   Follow active part
+                </label>
+                <label className="tumbler-street">
+                  <input type="checkbox" checked={street} disabled={!available || !loaded}
+                    onChange={(event) => setStreet(event.target.checked)} />
+                  Street scene
                 </label>
                 <p className="tumbler-viewer__camera-help">{reducedMotion
                   ? "Automatic views paused for reduced motion."

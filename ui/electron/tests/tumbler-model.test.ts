@@ -511,6 +511,9 @@ test("the runtime binder isolates white, orange and internal green reverse feedb
     near(bound.wheelRollRatios[1], 68.7 / 56, 0.02, "The other front tire retains the same rolling ratio");
     near(bound.wheelRollRatios[2], 1, 0.003, "Rear pair defines the reference rolling radius");
     near(bound.wheelRollRatios[3], 1, 0.003, "The other rear pair retains the same rolling radius");
+    const rearBounds = new THREE.Box3().setFromObject(bound.wheelSpins[2]);
+    near(bound.rearWheelRadius, (rearBounds.max.y - rearBounds.min.y) / 2, 0.003,
+      "Street travel must use the displayed rear tire radius");
     assert.ok(bound.frontSteering.every((part) => part instanceof THREE.Object3D));
     assert.equal(bound.lightMaterials.length, 1);
     const white = bound.lightMaterials[0];

@@ -177,7 +177,12 @@ async function launch(scenario = "normal") {
   activePage = page;
   page.setDefaultTimeout(15000);
   page.on("pageerror", (error) => runtimeErrors.push({ scenario, type: "pageerror", message: error.message }));
-  page.on("console", (message) => { if (message.type() === "error") runtimeErrors.push({ scenario, type: "console", message: message.text() }); });
+  page.on("console", (message) => {
+    const text = message.text();
+    const invalidGpu = message.type() === "warning" && /WebGL|shader|framebuffer/i.test(text)
+      && /error|invalid|incomplete|removed|not supported/i.test(text);
+    if (message.type() === "error" || invalidGpu) runtimeErrors.push({ scenario, type: "console", message: text });
+  });
   await page.waitForLoadState("domcontentloaded");
   await page.waitForFunction(() => Boolean(window.__AXLE_TEST__));
   return page;
@@ -256,6 +261,12 @@ async function setCameraFollow(enabled) {
   await activePage.keyboard.press("Escape");
   assert.equal(await menu.getByLabel("Follow active part", { exact: true }).isChecked(), enabled,
     "Closing the menu must retain the chosen automatic-camera preference");
+}
+async function setStreetScene(enabled) {
+  const menu = await openCameraMenu();
+  await menu.getByLabel("Street scene", { exact: true }).setChecked(enabled);
+  await activePage.keyboard.press("Escape");
+  await activePage.waitForFunction((enabled) => document.querySelector(".tumbler-viewer canvas")?.dataset.streetScene === String(enabled), enabled);
 }
 
 async function run() {
@@ -355,12 +366,21 @@ async function run() {
     const canvas = page.getByLabel("Interactive Tumbler model", { exact: true });
     await visible(canvas);
     await page.waitForFunction(() => Number(document.querySelector(".tumbler-viewer canvas")?.getAttribute("data-rendered-frames")) > 0);
+    await page.waitForFunction(() => document.querySelector(".tumbler-viewer canvas")?.dataset.surfaceTexturesReady === "true");
+    await page.waitForFunction(() => document.querySelector(".tumbler-viewer canvas")?.dataset.antialias === "smaa");
+    assert.ok(await canvasValue("data-multisample-count") >= 2, "The offscreen beauty render must antialias real geometry edges");
+    assert.equal(await canvas.getAttribute("data-volumetric-lighting"), "true", "HDR-capable GPUs must render depth-aware participating fog");
+    assert.equal(await canvas.getAttribute("data-shadow-technique"), "pcss");
+    assert.ok(await canvasValue("data-soft-shadow-materials") > 20, "Loaded CAD and street/ground materials must receive the contact-hardening filter");
     await page.getByLabel("Camera views", { exact: true }).waitFor({ state: "visible" });
     await page.waitForFunction(() => !document.querySelector(".tumbler-viewer button")?.disabled);
     const canvasBounds = await canvas.boundingBox();
     assert.ok(canvasBounds && canvasBounds.width > 250 && canvasBounds.height > 150, `The model needs a usable rendering area: ${JSON.stringify(canvasBounds)}`);
     assert.equal(await page.locator(".tumbler-viewer").getAttribute("data-live"), "false");
     assert.equal(await page.getByLabel("Follow active part", { exact: true }).isChecked(), true, "Smooth automatic camera must be enabled by default");
+    assert.equal(await page.getByLabel("Street scene", { exact: true }).isChecked(), false, "The optional street must be off by default");
+    assert.ok(await canvasValue("data-render-triangles") < 910_000, "Night atmosphere must add only lightweight geometry");
+    assert.ok(await canvasValue("data-render-calls") < 65, "The night scene must preserve a modest draw-call budget");
     const cameraMenu = page.locator(".tumbler-viewer__toolbar");
     assert.equal(await cameraMenu.getAttribute("open"), null, "Camera controls must be compact by default");
     const trigger = cameraMenu.locator("summary");
@@ -539,7 +559,15 @@ async function run() {
         const started = performance.now();
         while (performance.now() - started < 500) {
           await new Promise((resolve) => requestAnimationFrame(resolve));
-          samples.push(canvas.dataset.reverseLightIntensities.split(",").map(Number));
+          const values = canvas.dataset.reverseLightIntensities.split(",").map(Number);
+          const effects = canvas.dataset.lampEffects.split(",").map(Number);
+          if (effects[1] !== (values[0] > 1 ? 1 : 0)) throw new Error("Green glow must use the exact optical-lens phase");
+          if (Math.abs(effects[0] * 4 - Number(canvas.dataset.frontLightIntensity)) > 0.001) {
+            // The lens keeps an unlit material baseline; the secondary effects
+            // become fully invisible rather than glowing at that baseline.
+            if (!(effects[0] === 0 && Number(canvas.dataset.frontLightIntensity) < 0.1)) throw new Error("White beams must follow the same resolved lamp intensity");
+          }
+          samples.push(values);
         }
         return samples;
       });
@@ -607,6 +635,63 @@ async function run() {
     await streamTumblerTelemetry({ throttle: 100, measured_wheel_rate: 12, wheel_motion: null });
     await page.waitForTimeout(250);
     assert.equal(await canvasValue("data-wheel-rotation"), stopped, "Missing encoders must never substitute guessed drive speed");
+  });
+
+  await checkpoint("Optional street keeps the live camera and follows signed encoder travel", async () => {
+    await streamTumblerTelemetry({ measured_wheel_rate: 0 });
+    await selectCameraView("Overview");
+    await cameraSettled();
+    const before = await cameraPosition();
+    await page.evaluate(() => { window.__AXLE_STREET_CANVAS__ = document.querySelector(".tumbler-viewer canvas"); });
+    const menu = await openCameraMenu();
+    const touch = await page.context().newCDPSession(page);
+    try {
+      await touch.send("Emulation.setTouchEmulationEnabled", { enabled: true });
+      const bounds = await menu.locator(".tumbler-street").boundingBox();
+      assert.ok(bounds && bounds.height >= 48, "Street scene must have a touch-sized label");
+      await touch.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 }] });
+      await touch.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+      await page.waitForFunction(() => document.querySelector(".tumbler-viewer canvas")?.dataset.streetScene === "true");
+    } finally {
+      await touch.send("Emulation.setTouchEmulationEnabled", { enabled: false });
+      await touch.detach();
+    }
+    await page.keyboard.press("Escape");
+    assert.equal(await menu.getByLabel("Street scene", { exact: true }).isChecked(), true);
+    assert.equal(await page.evaluate(() => window.__AXLE_STREET_CANVAS__ === document.querySelector(".tumbler-viewer canvas")), true,
+      "Changing the environment must preserve the renderer and model");
+    assert.ok(positionDistance(before, await cameraPosition()) < 0.01, "Street toggle must not move the camera");
+    assert.equal((await fixture("snapshot")).status, "running", "Street toggle must leave live control running");
+    assert.ok(await canvasValue("data-render-triangles") > 920_000 && await canvasValue("data-render-triangles") < 950_000,
+      "Detailed city geometry must render within its measured scene budget");
+    assert.ok(await canvasValue("data-render-calls") < 120, "Detailed street must still use shared instanced geometry");
+    assert.ok(await canvasValue("data-reflection-calls") > 0 && await canvasValue("data-reflection-calls") < 120,
+      "Real puddle reflections use one bounded shared scene render");
+    assert.ok(await canvasValue("data-reflection-triangles") < 950_000,
+      "Reflections cannot silently multiply city geometry or recurse");
+    await streamTumblerTelemetry({ front_lights_on: true, throttle: 80, measured_wheel_rate: 8 });
+    const start = await canvasValue("data-street-travel");
+    await page.waitForFunction((before) => Number(document.querySelector(".tumbler-viewer canvas")?.dataset.streetTravel) > before + 0.1, start);
+    await page.waitForFunction(() => Number(document.querySelector(".tumbler-viewer canvas")?.dataset.shadowCalls) > 0);
+    assert.ok(await canvasValue("data-shadow-calls") <= 65, "Moving geometry must share one bounded cached key shadow render");
+    assert.ok(await canvasValue("data-shadow-triangles") < 950_000, "Volumetrics must reuse the key shadow rather than adding headlight shadow maps");
+    assert.ok(await canvasValue("data-render-triangles") < 950_000, "Shadow updates must not inflate beauty geometry measurements");
+    await screenshot("28-night-street-headlights");
+    const preview = path.join(output, "28-night-street-model.png");
+    await page.locator(".tumbler-viewer__stage").screenshot({ path: preview });
+    screenshots.push(preview);
+    await streamTumblerTelemetry({ throttle: -60, rocket_lights_on: true, measured_wheel_rate: -6 });
+    await page.waitForFunction(() => Number(document.querySelector(".tumbler-viewer canvas")?.dataset.wheelAngularVelocity) < -5);
+    const reverseStart = await canvasValue("data-street-travel");
+    await page.waitForFunction((before) => Number(document.querySelector(".tumbler-viewer canvas")?.dataset.streetTravel) < before - 0.1, reverseStart);
+    await streamTumblerTelemetry({ throttle: 100, measured_wheel_rate: 0 });
+    await page.waitForFunction(() => Number(document.querySelector(".tumbler-viewer canvas")?.dataset.wheelAngularVelocity) === 0);
+    const stopped = await canvasValue("data-street-travel");
+    await page.waitForTimeout(200);
+    assert.equal(await canvasValue("data-street-travel"), stopped, "Full throttle with a stalled car must not scroll the road");
+    await setStreetScene(false);
+    await setStreetScene(true);
+    assert.equal(await canvasValue("data-street-travel"), stopped, "Toggling the environment must not reset measured travel");
   });
 
   await checkpoint("Reverse camera remains steady through green-lamp blink phases", async () => {
@@ -707,6 +792,15 @@ async function run() {
     const combinedPreview = path.join(output, "26-tumbler-combined-model.png");
     await page.locator(".tumbler-viewer__stage").screenshot({ path: combinedPreview });
     screenshots.push(combinedPreview);
+    await resize(760, 600);
+    await page.locator(".tumbler-viewer canvas").scrollIntoViewIfNeeded();
+    await cameraSettled();
+    const narrowCombined = path.join(output, "29-night-street-combined-narrow.png");
+    await page.locator(".tumbler-viewer__stage").screenshot({ path: narrowCombined });
+    screenshots.push(narrowCombined);
+    await noHorizontalOverflow();
+    await resize(1280, 800);
+    await cameraSettled();
   });
 
   await checkpoint("Tumbler drive animation stops when feedback becomes stale", async () => {
@@ -726,8 +820,11 @@ async function run() {
     await page.waitForFunction(() => document.querySelector(".tumbler-viewer")?.getAttribute("data-live") === "false");
     await page.waitForFunction(() => Number(document.querySelector(".tumbler-viewer canvas")?.getAttribute("data-wheel-angular-velocity")) === 0);
     const staleRotation = await canvasValue("data-wheel-rotation");
+    const staleTravel = await canvasValue("data-street-travel");
     await page.waitForTimeout(200);
     assert.equal(await canvasValue("data-wheel-rotation"), staleRotation, "Lost telemetry must not keep showing a moving car");
+    assert.equal(await canvasValue("data-street-travel"), staleTravel, "Lost telemetry must also stop the street");
+    assert.equal(await page.locator(".tumbler-viewer canvas").getAttribute("data-lamp-effects"), "0.0000,0.0000,0.0000", "Stale telemetry must extinguish every secondary lamp effect");
     assert.ok(await canvasValue("data-boost-intensity") < 0.1);
     const staleReverse = (await page.locator(".tumbler-viewer canvas").getAttribute("data-reverse-light-intensities")).split(",").map(Number);
     assert.ok(staleReverse.every((value) => value < 0.1), "Stale feedback must also turn green reverse lamps off");
@@ -740,10 +837,12 @@ async function run() {
     assert.equal(await page.getByLabel("Follow active part", { exact: true }).isDisabled(), true);
     await selectCameraView("Rear drive");
     const stillRotation = await canvasValue("data-wheel-rotation");
+    const stillTravel = await canvasValue("data-street-travel");
     await streamTumblerTelemetry({ steering: 30, throttle: 60, measured_wheel_rate: 8 });
     await page.waitForFunction(() => document.querySelector(".tumbler-viewer")?.getAttribute("data-live") === "true");
     await page.waitForTimeout(200);
     assert.equal(await canvasValue("data-wheel-rotation"), stillRotation, "Reduced motion must suppress revolving wheel animation");
+    assert.equal(await canvasValue("data-street-travel"), stillTravel, "Reduced motion must freeze the street as well as the wheels");
     assert.equal(await page.locator(".tumbler-viewer").getAttribute("data-camera-view"), "drive", "Reduced motion must retain the manually chosen camera view");
     assert.ok((await canvasValue("data-steering")) < 0, "Reduced motion must retain the correctly directed steering pose");
     await screenshot("24-tumbler-reduced-motion");

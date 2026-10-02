@@ -88,6 +88,58 @@ the packaged desktop app. Unidentified Studio geometry and underlying brand/desi
 rights have not been independently cleared.
 The compact **View** menu beside the vehicle name contains part views and **Follow active part**.
 It opens upward, leaving the 3D preview unobstructed when closed; **Auto** indicates that following is enabled.
+The preview uses a cool night scene with damp asphalt, contact shadows and low haze.
+White headlight beams, green optical glow and orange boost spill follow the same
+resolved signal phases as the model's lamps, including reverse blinking, Attack and
+safety lockouts. **View → Street scene** adds an optional avenue with varied masonry
+blocks, glazed shops, recessed entrances, awnings, window interiors, stepped roofs,
+a distant skyline, fire escapes, rooftop equipment, elevated steel, hydrants,
+bollards, utility cabinets, bins, drainage grates and warm streetlights; it starts off.
+The car remains anchored while the street follows measured rear-wheel travel, including
+reverse and coasting. Trigger pressure cannot move it without encoder feedback.
+Stalled or expired wheel feedback stops the street; reduced motion freezes wheel,
+street and haze movement. The scene retains the 30fps limit, capped pixel density,
+one cached 2048px shadow map and suspension while hidden or idle. Original PCSS
+blocker search produces sharp contact shadows with distance-dependent penumbras,
+receiver-plane bias and stable light-space samples. Car, ground and nearby
+structural scenery share the map; faded camera-side buildings disappear from
+both beauty and shadow depth. Moving silhouettes refresh at most 10 times per
+second, with immediate refresh for model loading and street toggles.
+Packaged CC0 photographed albedo, normal and roughness maps supply brick and asphalt
+at 2048px and concrete and metal at 1024px, at their authored physical scale.
+Mipmapping, anisotropic filtering, bounded geometry MSAA and SMAA retain detail
+while moving. Original procedural maps provide an immediate fallback during local
+image decoding. A restrained original clouded night sky supplies horizon depth.
+The wet asphalt uses a dielectric clear layer and masked, rough, Fresnel-dependent
+puddles reflecting the actual city, vehicle and lamp optics. Their single extra
+scene render runs at half resolution, capped at 768px, only while Street scene is on.
+The packaged CC0 night-city HDR panorama supplies natural environmental
+reflections. Four nearby unshadowed sodium lamps follow actual street rows with
+smooth distance falloff, alongside real white headlight projectors. Edge-preserving
+half-resolution contact occlusion, restrained bloom and neutral-aware blue-steel
+filmic grading improve depth and light definition without recoloring green signals.
+Depth-aware, single-scattering volumetric lighting integrates the actual white
+headlight, sodium streetlamp and key-light radiance through low-lying air before
+bloom and tone mapping. Rays stop at the resolved beauty depth, including street
+clearance. The key uses its cached shadow depth; headlight occlusion uses a
+bounded visible-depth approximation. The 24-step fog target is half resolution,
+capped at 640px, with depth-aware upsampling and no additional scene render or
+time-dependent noise. Headlights switch off with their live signal; green optics
+and boost retain their resolved phases. This is a portable WebGL2 approximation
+of ray-traced lighting, not NVIDIA RTX, hardware ray tracing or path-traced global
+illumination, and has no NVIDIA runtime dependency.
+GPUs without floating-point render targets use the direct renderer and omit the
+planar reflection and volumetric pass, using inexpensive headlight cones instead;
+contact-hardening shadows, vehicle control and the scene remain available.
+Original environment geometry and rendering are implemented in
+`src/renderer/src/vehicle/tumblerAtmosphere.ts`, `tumblerSignals.ts`, `tumblerStreet.ts`,
+`streetTextures.ts`, `wetRoadReflection.ts`, `tumblerRendering.ts`,
+`tumblerVolumetrics.ts`, `tumblerShadows.ts` and `tumblerShadowCache.ts`.
+[environment](environment/README.md) preserves the Poly Haven asset sources,
+authors, hashes and CC0 legal text; installed builds include these notices and
+load all maps offline. No box artwork, film frames or branded city art is bundled.
+Original source modules use Apache-2.0, environmental photo maps use CC0, and the
+car CAD retains its separate license described above.
 The compact vehicle footer contains the model name and View control; wheel-feedback messages
 and detailed preview notes appear only in Developer mode. Orbit/zoom help lives inside View.
 The default overview and active-part shots are closer, with lower chase views for driving

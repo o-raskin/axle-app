@@ -107,6 +107,22 @@
         "to": "licenses/THIRD-PARTY-SOFTWARE-NOTICES.txt"
       },
       {
+        "from": "environment/LICENSE.md",
+        "to": "licenses/environment/LICENSE.md"
+      },
+      {
+        "from": "environment/README.md",
+        "to": "licenses/environment/README.md"
+      },
+      {
+        "from": "environment/CC0-1.0.txt",
+        "to": "licenses/environment/CC0-1.0.txt"
+      },
+      {
+        "from": "environment/provenance.json",
+        "to": "licenses/environment/provenance.json"
+      },
+      {
         "from": "node_modules/electron/dist/LICENSE",
         "to": "licenses/electron.txt"
       },

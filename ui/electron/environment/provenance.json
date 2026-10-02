@@ -1,0 +1,161 @@
+{
+  "schemaVersion": 1,
+  "retrievedDate": "2026-10-02",
+  "license": "CC0-1.0",
+  "licenseEvidenceUrl": "https://polyhaven.com/license",
+  "assets": [
+    {
+      "surface": "brick",
+      "assetId": "brick_wall_10",
+      "title": "Brick Wall 10",
+      "author": "Dimitrios Savva",
+      "source": "https://polyhaven.com/a/brick_wall_10",
+      "license": "CC0-1.0",
+      "licenseUrl": "https://polyhaven.com/license",
+      "tileSizeMeters": 1.9,
+      "resolution": 2048,
+      "maps": {
+        "albedo": {
+          "file": "textures/brick_wall_10_albedo_2k.jpg",
+          "downloadUrl": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/brick_wall_10/brick_wall_10_diff_2k.jpg",
+          "sourceMd5": "c431b487fec4d26b40ac934713d28892",
+          "bytes": 2984617,
+          "sha256": "7a01acd1f4ecd0de5e7755bc411e7f43278327513a0712002c2ead3aa24c8444"
+        },
+        "normal": {
+          "file": "textures/brick_wall_10_normal_2k.jpg",
+          "downloadUrl": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/brick_wall_10/brick_wall_10_nor_gl_2k.jpg",
+          "sourceMd5": "487ece6c7963eff53bfcde3bda4d654f",
+          "bytes": 3630070,
+          "sha256": "8303f532dbe633e6ac10dcbbafd14ffc23d0c3a07de8a399beb5eab3d8491e3e"
+        },
+        "roughness": {
+          "file": "textures/brick_wall_10_roughness_2k.jpg",
+          "downloadUrl": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/brick_wall_10/brick_wall_10_rough_2k.jpg",
+          "sourceMd5": "ac9f9eed14dddddf8476c2505a0b4a1c",
+          "bytes": 1584391,
+          "sha256": "ce8787c9af52f721dd5856a9013e89f260eacc46133abde0e3aaf8a9c87a60e1"
+        }
+      }
+    },
+    {
+      "surface": "asphalt",
+      "assetId": "asphalt_02",
+      "title": "Asphalt 02",
+      "author": "Rob Tuytel",
+      "source": "https://polyhaven.com/a/asphalt_02",
+      "license": "CC0-1.0",
+      "licenseUrl": "https://polyhaven.com/license",
+      "tileSizeMeters": 3,
+      "resolution": 2048,
+      "maps": {
+        "albedo": {
+          "file": "textures/asphalt_02_albedo_2k.jpg",
+          "downloadUrl": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/asphalt_02/asphalt_02_diff_2k.jpg",
+          "sourceMd5": "336af399fd98a39ab986d8b3bf73b4ff",
+          "bytes": 3075676,
+          "sha256": "28f5ba8690553f192c0e5e1a5ff40f34765b4b93f4cc7059b1a3e9c795b6c28c"
+        },
+        "normal": {
+          "file": "textures/asphalt_02_normal_2k.jpg",
+          "downloadUrl": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/asphalt_02/asphalt_02_nor_gl_2k.jpg",
+          "sourceMd5": "77ebd1cc0b020ccaa1c6b58f103d1f75",
+          "bytes": 4943950,
+          "sha256": "ffe49db71a0fd34c1e259625df66a302a237597d6ef655307987ec4e45bc6f21"
+        },
+        "roughness": {
+          "file": "textures/asphalt_02_roughness_2k.jpg",
+          "downloadUrl": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/asphalt_02/asphalt_02_rough_2k.jpg",
+          "sourceMd5": "6fe669ab38640ef2009d6a28d1ad5ee9",
+          "bytes": 2230457,
+          "sha256": "b9a516b61b7040a9245ac206642d5f767ad9589a0169c4a1668221429e8a998c"
+        }
+      }
+    },
+    {
+      "surface": "concrete",
+      "assetId": "concrete_floor_02",
+      "title": "Concrete Floor 02",
+      "author": "Rob Tuytel",
+      "source": "https://polyhaven.com/a/concrete_floor_02",
+      "license": "CC0-1.0",
+      "licenseUrl": "https://polyhaven.com/license",
+      "tileSizeMeters": 2,
+      "resolution": 1024,
+      "maps": {
+        "albedo": {
+          "file": "textures/concrete_floor_02_albedo_1k.jpg",
+          "downloadUrl": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/concrete_floor_02/concrete_floor_02_diff_1k.jpg",
+          "sourceMd5": "1cfee53d2f82fa59726ab7ae6a2e8c09",
+          "bytes": 776097,
+          "sha256": "6db84a6d87dc50508b9d134d6fbd2b7e876b8081a5f43a118a249ca18de73af5"
+        },
+        "normal": {
+          "file": "textures/concrete_floor_02_normal_1k.jpg",
+          "downloadUrl": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/concrete_floor_02/concrete_floor_02_nor_gl_1k.jpg",
+          "sourceMd5": "c2065fd81f571f4e39163ea5661128fb",
+          "bytes": 192757,
+          "sha256": "fcda391b57a816d646ae15544688be53790478da5cd48dbe514b3c6901415e61"
+        },
+        "roughness": {
+          "file": "textures/concrete_floor_02_roughness_1k.jpg",
+          "downloadUrl": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/concrete_floor_02/concrete_floor_02_rough_1k.jpg",
+          "sourceMd5": "653d60d0db1872a49138455cf31c8326",
+          "bytes": 318550,
+          "sha256": "c7f026a611b7859903c61ec7fd4574944157223e9e7796413dd6e2a66eaeac7a"
+        }
+      }
+    },
+    {
+      "surface": "metal",
+      "assetId": "blue_metal_plate",
+      "title": "Blue Metal Plate",
+      "author": "Rob Tuytel",
+      "source": "https://polyhaven.com/a/blue_metal_plate",
+      "license": "CC0-1.0",
+      "licenseUrl": "https://polyhaven.com/license",
+      "tileSizeMeters": 2.5,
+      "resolution": 1024,
+      "maps": {
+        "albedo": {
+          "file": "textures/blue_metal_plate_albedo_1k.jpg",
+          "downloadUrl": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/blue_metal_plate/blue_metal_plate_diff_1k.jpg",
+          "sourceMd5": "a906d0e554596fb76c6969f2f644c5e6",
+          "bytes": 395923,
+          "sha256": "a0162bffce47d4a35613a12af22571b28c18412dc5805cbb69eac343554ef750"
+        },
+        "normal": {
+          "file": "textures/blue_metal_plate_normal_1k.jpg",
+          "downloadUrl": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/blue_metal_plate/blue_metal_plate_nor_gl_1k.jpg",
+          "sourceMd5": "f14c0f01832f8b18c39f07e4b5d6f749",
+          "bytes": 238025,
+          "sha256": "970f0273c9e2e3b4fc8338bfd58a28c413b70ac4d1734d9dc8a136724bde56e6"
+        },
+        "roughness": {
+          "file": "textures/blue_metal_plate_roughness_1k.jpg",
+          "downloadUrl": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/blue_metal_plate/blue_metal_plate_rough_1k.jpg",
+          "sourceMd5": "76c3911d8ad2416e4db3104a2ef831c7",
+          "bytes": 402450,
+          "sha256": "37168cf57144db28dd0743dab47fbebc09147fac919d5e2b5610b069c0b13a46"
+        }
+      }
+    }
+  ],
+  "lighting": {
+    "assetId": "modern_buildings_night",
+    "title": "Modern Buildings Night",
+    "author": "Greg Zaal",
+    "source": "https://polyhaven.com/a/modern_buildings_night",
+    "license": "CC0-1.0",
+    "licenseUrl": "https://polyhaven.com/license",
+    "file": "lighting/modern_buildings_night_1k.hdr",
+    "downloadUrl": "https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/modern_buildings_night_1k.hdr",
+    "sourceMd5": "3067e8d9e8e961e6a11ff45c055a5fbd",
+    "sha256": "a690048dcecabf5ed1ad773f7abdec7cce7b1fea4d89b17f054a18f3e0fa2919",
+    "bytes": 1655510,
+    "format": "Radiance RGBE HDR",
+    "width": 1024,
+    "height": 512,
+    "usage": "Offline scene environment lighting and reflections only; never shown as background."
+  }
+}
