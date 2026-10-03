@@ -13,7 +13,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: verify-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  group: verify-${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 defaults:
@@ -67,7 +67,11 @@ jobs:
           cache-dependency-path: requirements*.txt
       - run: python -m pip install -r requirements.txt
       - name: Verify minimum development runtime including real session startup
-        run: python -m pytest tests -q --cov --cov-report=term-missing --cov-report=xml:coverage.xml
+        env:
+          PYTHONUNBUFFERED: '1'
+        run: >-
+          python -m pytest tests -vv --durations=10 -o faulthandler_timeout=60
+          --cov --cov-report=term-missing --cov-report=xml:coverage.xml
       - name: Retain Python coverage
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -240,7 +244,7 @@ jobs:
           path: release-assets/
           if-no-files-found: error
           compression-level: 0
-          retention-days: 7
+          retention-days: 30
 
   verified:
     name: Verify complete release
@@ -276,3 +280,49 @@ jobs:
         env:
           RELEASE_VERSION: ${{ inputs.version || '0.1.0' }}
         run: python scripts/release_assets.py verify --version "$RELEASE_VERSION" --commit "$GITHUB_SHA"
+      - name: Retain complete verified distribution bundle
+        id: bundle
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: verified-release
+          path: release-assets/
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
+      - name: Explain downloads and the manual release step
+        env:
+          RELEASE_VERSION: ${{ inputs.version || '0.1.0' }}
+          BUNDLE_URL: ${{ steps.bundle.outputs.artifact-url }}
+        shell: python
+        run: |
+          import os
+          from pathlib import Path
+          from textwrap import dedent
+          repository = os.environ['GITHUB_REPOSITORY']
+          run_id = os.environ['GITHUB_RUN_ID']
+          summary = dedent(f"""
+          ## Your Axle build is ready
+
+          Version **{os.environ['RELEASE_VERSION']}** · commit `{os.environ['GITHUB_SHA']}`
+
+          [Download all verified packages]({os.environ['BUNDLE_URL']}) or choose a `release-*` target below under **Artifacts**:
+
+          | Artifact | Terminal | Desktop |
+          | --- | --- | --- |
+          | `release-macos-arm64` | tar.gz | DMG + ZIP |
+          | `release-macos-x64` | tar.gz | DMG + ZIP |
+          | `release-windows-x64` | ZIP | Installer |
+          | `release-linux-x64` | tar.gz | deb + Steam Deck AppImage |
+
+          Downloads are retained for **30 days**. SHA256SUMS and the source commit are included.
+          """)
+          if os.environ['GITHUB_REF'] == 'refs/heads/main':
+              summary += dedent(f"""
+          Ready to release? Open [Prepare release draft](https://github.com/{repository}/actions/workflows/prepare-release.yml),
+          select **main**, choose **Run workflow**, and enter build run ID **{run_id}**.
+          Review the prepared draft and click **Publish release** yourself. This build creates no release.
+          """)
+          else:
+              summary += '\nPR artifacts are for verification; only a successful main build can become a release draft.\n'
+          with Path(os.environ['GITHUB_STEP_SUMMARY']).open('a', encoding='utf-8') as output:
+              output.write(summary)

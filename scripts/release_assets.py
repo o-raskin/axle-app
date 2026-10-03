@@ -1,4 +1,4 @@
-"""Stage, validate and publish the complete native release artifact set."""
+"""Stage verified native packages and explicitly prepare a draft for manual publication."""
 
 from __future__ import annotations
 
@@ -26,7 +26,7 @@ TARGETS = {
 }
 BINARY = "lego-technic-gamepad-bridge"
 EXECUTABLE_MODE = 0o755
-RELEASE_FIELDS = "isDraft,targetCommitish,assets"
+RELEASE_FIELDS = "isDraft,targetCommitish,assets,url"
 
 
 def validate_identity(version: str, commit: str) -> None:
@@ -211,6 +211,107 @@ def gh(*arguments: str) -> str:
     return subprocess.run(["gh", *arguments], check=True, capture_output=True, text=True).stdout
 
 
+def positive_id(value: str) -> int:
+    """Reject ambiguous IDs, API paths and shell-like dispatch input."""
+    if not re.fullmatch(r"[1-9][0-9]*", value):
+        raise ValueError("Build run ID/number must be a positive decimal integer")
+    return int(value)
+
+
+def select_build(run_id: str, repository: str) -> dict[str, str]:
+    """Select one immutable bundle from a successful main build, without write access."""
+    identifier = positive_id(run_id)
+    if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository):
+        raise ValueError("Invalid GitHub repository")
+    run = json.loads(gh("api", f"repos/{repository}/actions/runs/{identifier}"))
+    if (
+        not isinstance(run, dict)
+        or type(run.get("id")) is not int
+        or run["id"] != identifier
+        or run.get("path") not in (".github/workflows/release.yml", ".github/workflows/release.yml@main")
+        or run.get("head_branch") != "main"
+        or run.get("event") not in ("push", "workflow_dispatch")
+        or run.get("status") != "completed"
+        or run.get("conclusion") != "success"
+        or not isinstance(run.get("repository"), dict)
+        or run["repository"].get("full_name") != repository
+        or not isinstance(run.get("head_repository"), dict)
+        or run["head_repository"].get("full_name") != repository
+        or type(run.get("run_number")) is not int
+        or run["run_number"] <= 0
+    ):
+        raise ValueError("Choose a completed, successful Build distributions run from this repository's main branch")
+    commit = run.get("head_sha")
+    if not isinstance(commit, str) or not re.fullmatch(r"[0-9a-f]{40}", commit):
+        raise ValueError("Build run has no valid source commit")
+    comparison = json.loads(gh("api", f"repos/{repository}/compare/{commit}...main"))
+    if (
+        not isinstance(comparison, dict)
+        or comparison.get("status") not in ("ahead", "identical")
+        or not isinstance(comparison.get("merge_base_commit"), dict)
+        or comparison["merge_base_commit"].get("sha") != commit
+    ):
+        raise ValueError("Build commit is no longer part of main")
+    pages = json.loads(
+        gh("api", "--paginate", "--slurp", f"repos/{repository}/actions/runs/{identifier}/artifacts?per_page=100")
+    )
+    if not isinstance(pages, list) or not all(
+        isinstance(page, dict) and isinstance(page.get("artifacts"), list) for page in pages
+    ):
+        raise ValueError("Invalid build artifact metadata")
+    matches = [
+        artifact
+        for page in pages
+        for artifact in page["artifacts"]
+        if isinstance(artifact, dict) and artifact.get("name") == "verified-release"
+    ]
+    if len(matches) != 1:
+        raise ValueError("Build must have exactly one verified-release bundle; rebuild if it expired or was deleted")
+    artifact = matches[0]
+    provenance = artifact.get("workflow_run")
+    if (
+        type(artifact.get("id")) is not int
+        or artifact["id"] <= 0
+        or artifact.get("expired") is not False
+        or not isinstance(provenance, dict)
+        or provenance.get("id") != identifier
+        or provenance.get("head_sha") != commit
+    ):
+        raise ValueError("Verified bundle is expired or belongs to a different build")
+    return {
+        "run_id": str(identifier),
+        "run_number": str(run["run_number"]),
+        "commit": commit,
+        "artifact_id": str(artifact["id"]),
+    }
+
+
+def verify_build(directory: Path, commit: str, run_number: str) -> str:
+    """Bind an already-built bundle to the selected run before giving a job write access."""
+    number = positive_id(run_number)
+    path = directory / "release-manifest.json"
+    describe(path)
+    manifest = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(manifest, dict) or not isinstance(manifest.get("version"), str):
+        raise ValueError("Invalid complete release manifest")
+    version = str(manifest["version"])
+    validate_identity(version, commit)
+    if manifest.get("commit") != commit or version.rsplit(".", 1)[1] != str(number):
+        raise ValueError("Bundle version or commit does not match the selected build run")
+    expected = verify(directory, version, commit)
+    if manifest != expected:
+        raise ValueError("Complete release manifest differs from its verified native targets")
+    return version
+
+
+def write_outputs(values: dict[str, str]) -> None:
+    """Expose validated identifiers to later Actions steps, without accepting newlines."""
+    if output := os.environ.get("GITHUB_OUTPUT"):
+        with Path(output).open("a", encoding="utf-8") as stream:
+            for key, value in values.items():
+                print(f"{key}={value}", file=stream)
+
+
 def verify_remote_assets(directory: Path, tag: str, names: list[str]) -> None:
     """Verify uploaded bytes, including same-size corruption, before trusting a release."""
     with tempfile.TemporaryDirectory(prefix="axle-release-readback-") as temporary:
@@ -223,8 +324,8 @@ def verify_remote_assets(directory: Path, tag: str, names: list[str]) -> None:
                 raise ValueError(f"Remote artifact checksum or size mismatch: {name}")
 
 
-def publish(directory: Path, version: str, commit: str) -> None:
-    """Upload into a draft, publishing only after every asset has arrived."""
+def prepare_draft(directory: Path, version: str, commit: str, run_id: str | None = None) -> str:
+    """Upload and read back the complete set, leaving publication to a human."""
     manifest = verify(directory, version, commit)
     tag = f"v{version}"
     repository = os.environ["GH_REPO"]
@@ -249,7 +350,7 @@ def publish(directory: Path, version: str, commit: str) -> None:
             if resolved != commit:
                 raise ValueError("Published tag points to a different commit")
             print(f"{tag} is already published with the same artifact manifest")
-            return
+            return str(existing["url"])
         if remote_names - set(names):
             raise ValueError("Existing draft contains unexpected assets")
     # Check tags for new releases and resumed drafts alike.
@@ -263,21 +364,6 @@ def publish(directory: Path, version: str, commit: str) -> None:
         raise ValueError("Existing tag points to a different commit")
     if tag_result.returncode and "(HTTP 404)" not in tag_result.stderr and "(HTTP 422)" not in tag_result.stderr:
         raise RuntimeError(f"Cannot verify release tag: {tag_result.stderr}")
-    if existing is None:
-        gh("release", "create", tag, "--draft", "--target", commit, "--title", f"Axle {version}")
-    gh("release", "upload", tag, *(str(directory / name) for name in names), "--clobber")
-    # gh release view also resolves draft tags; the REST tags endpoint only finds published releases.
-    uploaded = json.loads(gh("release", "view", tag, "--json", RELEASE_FIELDS))
-    expected_sizes = {name: (directory / name).stat().st_size for name in names}
-    actual_sizes = {asset["name"]: asset["size"] for asset in uploaded["assets"] if asset["state"] == "uploaded"}
-    if (
-        not uploaded["isDraft"]
-        or uploaded["targetCommitish"] != commit
-        or len(uploaded["assets"]) != len(names)
-        or actual_sizes != expected_sizes
-    ):
-        raise ValueError("Draft upload is incomplete; leaving it unpublished")
-    verify_remote_assets(directory, tag, names)
     notes = (
         f"Commit: `{commit}`\n\n"
         "Terminal: macOS arm64/x64, Windows x64, Linux x64.\n\n"
@@ -298,22 +384,81 @@ def publish(directory: Path, version: str, commit: str) -> None:
         "disabled: this is a native Linux app.\n\n"
         "Hardware behavior requires a compatible controller, Bluetooth adapter and hub.\n"
     )
-    with tempfile.TemporaryDirectory() as temporary:
-        notes_path = Path(temporary) / "notes.md"
-        notes_path.write_text(notes, encoding="utf-8")
-        gh("release", "edit", tag, "--notes-file", str(notes_path), "--draft=false")
-    print(f"Published {tag}")
+    if run_id is not None:
+        notes += f"\nVerified build: https://github.com/{repository}/actions/runs/{positive_id(run_id)}\n"
+    if existing is None:
+        with tempfile.TemporaryDirectory() as temporary:
+            notes_path = Path(temporary) / "notes.md"
+            notes_path.write_text(notes, encoding="utf-8")
+            gh(
+                "release",
+                "create",
+                tag,
+                "--draft",
+                "--target",
+                commit,
+                "--title",
+                f"Axle {version}",
+                "--generate-notes",
+                "--notes-file",
+                str(notes_path),
+            )
+    # Resuming a draft preserves any notes the maintainer has already edited.
+    gh("release", "upload", tag, *(str(directory / name) for name in names), "--clobber")
+    uploaded = json.loads(gh("release", "view", tag, "--json", RELEASE_FIELDS))
+    expected_sizes = {name: (directory / name).stat().st_size for name in names}
+    actual_sizes = {asset["name"]: asset["size"] for asset in uploaded["assets"] if asset["state"] == "uploaded"}
+    if (
+        not uploaded["isDraft"]
+        or uploaded["targetCommitish"] != commit
+        or len(uploaded["assets"]) != len(names)
+        or actual_sizes != expected_sizes
+    ):
+        raise ValueError("Draft upload is incomplete; leaving it unpublished")
+    verify_remote_assets(directory, tag, names)
+    url = str(uploaded["url"])
+    print(f"Prepared {tag}: {url}\nReview the notes and publish manually in GitHub Releases.")
+    if summary := os.environ.get("GITHUB_STEP_SUMMARY"):
+        with Path(summary).open("a", encoding="utf-8") as output:
+            output.write(
+                f"## Axle {version} is ready for your review\n\n"
+                f"[Open the release draft]({url})\n\n"
+                "All 11 installers/archives, both update feeds, the manifest and checksums are uploaded and verified. "
+                "Edit the generated release notes, try the build with your vehicle, then click **Publish release**. "
+                "The workflow leaves the release as a draft.\n"
+            )
+    return url
 
 
 def main() -> None:
     """Run the requested stage of the release artifact contract."""
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=("stage", "verify", "publish"))
-    parser.add_argument("--version", required=True)
-    parser.add_argument("--commit", required=True)
+    parser.add_argument("command", choices=("stage", "verify", "select-build", "verify-build", "draft"))
+    parser.add_argument("--version")
+    parser.add_argument("--commit")
+    parser.add_argument("--run-id")
+    parser.add_argument("--run-number")
     parser.add_argument("--directory", type=Path, default=ROOT / "release-assets")
     parser.add_argument("--target", choices=TARGETS)
     args = parser.parse_args()
+    if args.command == "select-build":
+        if not args.run_id:
+            parser.error("select-build requires --run-id")
+        selection = select_build(args.run_id, os.environ["GH_REPO"])
+        write_outputs(selection)
+        print(f"Selected successful main build {selection['run_id']} at {selection['commit']}")
+        return
+    if not args.commit:
+        parser.error(f"{args.command} requires --commit")
+    if args.command == "verify-build":
+        if not args.run_number:
+            parser.error("verify-build requires --run-number")
+        version = verify_build(args.directory, args.commit, args.run_number)
+        write_outputs({"version": version})
+        print(f"Verified complete build v{version} at {args.commit}")
+        return
+    if not args.version:
+        parser.error(f"{args.command} requires --version")
     if args.command == "stage":
         if not args.target:
             parser.error("stage requires --target")
@@ -322,7 +467,7 @@ def main() -> None:
         verify(args.directory, args.version, args.commit)
         print("Verified all four native targets, eleven distribution assets and two update feeds")
     else:
-        publish(args.directory, args.version, args.commit)
+        prepare_draft(args.directory, args.version, args.commit, args.run_id)
 
 
 if __name__ == "__main__":

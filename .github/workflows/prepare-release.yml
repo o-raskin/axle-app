@@ -1,0 +1,101 @@
+name: Prepare release draft
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_run_id:
+        description: Successful main Build distributions run ID (shown in its summary or URL)
+        type: string
+        required: true
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: prepare-release-draft-${{ inputs.build_run_id }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  validate:
+    name: Validate the existing main build
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    outputs:
+      commit: ${{ steps.build.outputs.commit }}
+      artifact_id: ${{ steps.build.outputs.artifact_id }}
+      run_id: ${{ steps.build.outputs.run_id }}
+      version: ${{ steps.inventory.outputs.version }}
+    steps:
+      - name: Require dispatch from main
+        if: github.ref != 'refs/heads/main'
+        run: |
+          echo '::error::Select main when running Prepare release draft.'
+          exit 1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - name: Resolve a successful build and its immutable artifact ID
+        id: build
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          BUILD_RUN_ID: ${{ inputs.build_run_id }}
+        run: python scripts/release_assets.py select-build --run-id "$BUILD_RUN_ID"
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          artifact-ids: ${{ steps.build.outputs.artifact_id }}
+          run-id: ${{ steps.build.outputs.run_id }}
+          github-token: ${{ github.token }}
+          path: release-assets
+          merge-multiple: true
+          digest-mismatch: error
+      - name: Recheck every target, version and byte before allowing a draft
+        id: inventory
+        env:
+          BUILD_COMMIT: ${{ steps.build.outputs.commit }}
+          BUILD_RUN_NUMBER: ${{ steps.build.outputs.run_number }}
+        run: >-
+          python scripts/release_assets.py verify-build --commit "$BUILD_COMMIT"
+          --run-number "$BUILD_RUN_NUMBER"
+
+  draft:
+    name: Prepare all packages for manual publication
+    needs: validate
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          artifact-ids: ${{ needs.validate.outputs.artifact_id }}
+          run-id: ${{ needs.validate.outputs.run_id }}
+          github-token: ${{ github.token }}
+          path: release-assets
+          merge-multiple: true
+          digest-mismatch: error
+      - name: Create or resume a draft and verify all uploaded bytes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_VERSION: ${{ needs.validate.outputs.version }}
+          BUILD_COMMIT: ${{ needs.validate.outputs.commit }}
+          BUILD_RUN_ID: ${{ needs.validate.outputs.run_id }}
+        run: >-
+          python scripts/release_assets.py draft --version "$RELEASE_VERSION"
+          --commit "$BUILD_COMMIT" --run-id "$BUILD_RUN_ID"

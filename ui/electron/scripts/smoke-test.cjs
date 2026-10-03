@@ -979,7 +979,7 @@ async function run() {
   assert.deepEqual(runtimeErrors, [], "Unexpected renderer console/runtime errors");
 }
 
-(async () => {
+async function main() {
   let failure;
   try { await run(); } catch (error) {
     failure = error;
@@ -1001,4 +1001,9 @@ async function run() {
   }
   if (failure) { console.error(failure); process.exitCode = 1; }
   else process.stdout.write(`\n${checks.length} checks passed. Screenshots and report: ${output}\n`);
-})();
+}
+
+// Documentation captures share this isolated fixture; importing it never starts
+// the smoke suite, touches saved preferences or connects to physical devices.
+module.exports = { fixtureMain, fixturePreload };
+if (require.main === module) void main();

@@ -1,7 +1,12 @@
 # Release pipeline
 
-PRs and releases use the same verification workflow. Pushes to `main` and manual dispatch invoke
-`release.yml`; only `main` can publish. No signing credentials or other optional services are needed.
+Every push to `main` builds all supported distributions through **Build distributions**
+(`release.yml`). PRs run the same **Verify** workflow (`lint.yml`), including the native matrix.
+These workflows have read-only repository permissions and create downloadable artifacts only.
+They never create a release, draft or tag. No signing credentials or additional services are needed.
+
+**Prepare release draft** (`prepare-release.yml`) runs only when a maintainer explicitly requests
+it on `main`. It reuses a successful build's exact packages and leaves publication to the maintainer.
 
 ## Native targets
 
@@ -18,9 +23,10 @@ Python 3.12 provides pygame wheels on all four hosts; Node.js 24 LTS runs the El
 
 ## Required checks
 
-1. Ruff lint/format, strict mypy, and checksum-pinned actionlint validation of both workflows.
+1. Ruff lint/format, strict mypy, and checksum-pinned actionlint validation of every workflow.
    The full Python test suite also runs on Python 3.9, the minimum development runtime, including
-   PLAYVM calibration through live telemetry with cold, delayed and unavailable encoder feedback.
+   PLAYVM calibration through live telemetry with cold, delayed and unavailable encoder feedback,
+   plus encoder shutdown/restart when an immediately completed request consumes task cancellation.
 2. Electron lint, type checking, unit tests, production renderer build and fixture UI tests.
 3. Python and Electron unit tests on each native host, then one PyInstaller build reused by the
    terminal distribution and the desktop package. Frozen verification checks embedded profiles,
@@ -34,6 +40,13 @@ Python 3.12 provides pygame wheels on all four hosts; Node.js 24 LTS runs the El
    Each app must report the intended version and load every profile through the real bundled engine.
 5. A complete inventory of four target manifests, eleven distribution files and two update feeds, with matching
    version, commit, size and SHA-256. Missing, unexpected, stale or corrupt files fail verification.
+
+If the aggregate reports `python-compatibility: cancelled` and `native: skipped`, open the
+**Python 3.9 runtime and live startup** job first. A cancelled job can mean that its ten-minute
+deadline expired; native packaging correctly waits for it to succeed. The compatibility step
+prints each test name and dumps thread tracebacks if a test lasts longer than 60 seconds.
+The deadline and required gate remain in place. Rerunning an old commit does not include a
+fix still present only in the local working tree; run a new build after committing that fix.
 
 Tests never connect to Bluetooth hardware. Hardware operation on each OS, including Steam Input
 in Deck Game Mode, remains a manual acceptance check. macOS apps are ad-hoc signed, without an
@@ -55,24 +68,69 @@ On macOS, signing changes the frozen helper's signature. Verification checks its
 compares the source and packaged binaries after removing signatures from disposable copies only.
 The installed app and source helper are never modified by verification.
 
-## Version and publication
+## Download a build
+
+Open a successful **Build distributions** run in Actions. Its summary shows the version, source
+commit and build run ID, with a direct download of **verified-release** containing every platform,
+update metadata and checksums. The four **release-macos-arm64**, **release-macos-x64**,
+**release-windows-x64** and **release-linux-x64** artifacts are also available separately under
+Artifacts. All distribution artifacts are retained for **30 days**; coverage and failed-UI evidence
+are retained for 7 days. Extract the outer Actions artifact ZIP before using the installers.
+
+Artifacts are build candidates. They do not appear in the app's updater until someone publishes a
+GitHub Release. Try Bluetooth and controller behavior on the intended hardware before publication.
+
+## Create a release when you are ready
+
+1. Choose a successful **Build distributions** run from `main`. Copy its **build run ID** from the
+   summary or the last number in its Actions URL. This is the long run ID, not the short run number.
+2. In Actions, open **Prepare release draft → Run workflow**, select branch **main**, paste the
+   `build_run_id`, and start the workflow. No local build, asset selection, secret or tag push is needed.
+3. Follow **Open the release draft** in the finished workflow's summary. It contains all eleven
+   platform downloads, both updater feeds, `SHA256SUMS` and `release-manifest.json`. Notes include
+   a generated changelog, installation instructions and a link to the verified source build.
+4. Edit the notes, check the version and hardware behavior, then click **Publish release** in GitHub.
+   Publication is always your explicit action. The associated tag targets the original built commit,
+   even if `main` has moved forward since the build.
+
+If an upload fails, the release stays a draft. Run the preparation again with the same build run ID
+to resume; notes you have already edited are preserved. Published assets are never replaced. If the
+artifact has expired, run **Build distributions** manually on `main` to obtain a fresh candidate.
+Builds made before this artifact-first pipeline have no `verified-release` bundle and cannot be selected.
+
+## Version and safeguards
 
 `Verify complete release` is the aggregate check suitable for branch protection. It fails when
 any prerequisite fails or is skipped, including failures before the native matrix starts.
 
-Major/minor come from `ui/electron/package.json`; patch is the release workflow run number.
+Major/minor come from `ui/electron/package.json`; patch is the Build distributions workflow run number.
 For example, package version `0.1.0` and run 123 produce version `0.1.123`, tag `v0.1.123`.
 PR builds use `0.1.0` as a validation version and never publish.
 
-Actions are pinned by commit. Workflows default to read-only permissions and do not persist Git
-credentials. Only the final publish job gets `contents: write`. PR runs supersede earlier runs for
-the same PR; release runs are serialized without canceling an active publication.
+The original `release.yml` file is retained so its workflow run numbering continues from existing
+releases. Rerunning one build keeps its version; a new build run gets a new patch. Distinct main
+commits have independent concurrency groups so a new push cannot replace a pending older commit's
+verification. PR runs can supersede older runs for the same PR.
 
-Publication revalidates downloaded artifacts, creates or resumes a draft belonging to the same
-commit, uploads the complete set plus `SHA256SUMS` and `release-manifest.json`, verifies the uploaded
-inventory and sizes, then publishes. A failed upload leaves a draft. A rerun never replaces public
-assets; an already published release is accepted only when its commit and manifest match exactly.
-Rebuilding an already published version may produce different bytes; create a new run/version then.
+For a rebuild after a successful run, choose **Run workflow** to get a fresh version. **Re-run all jobs**
+retains the old version and cannot overwrite immutable artifacts already uploaded under the same names.
+
+Actions are pinned by commit and do not persist Git credentials. Only the draft upload job gets
+`contents: write`, after a separate job with read-only access confirms the candidate. Selection rejects
+PR/fork/other-workflow runs, failed or incomplete jobs, commits outside main's history, and missing,
+duplicate or expired complete bundles. Download uses the validated immutable artifact ID, rather than
+an artifact name that could resolve to a different upload. The complete manifest's commit and patch
+must match the selected run; all four manifests, filenames, feeds, sizes and checksums are verified again.
+
+Draft preparation creates or resumes a draft belonging to the same commit, uploads every asset and
+reads the files back to verify their bytes. Existing tags must point to that commit. A published release
+is accepted only if its inventory, bytes and tag match exactly, with no modifications. No command in
+the release helper or workflow publishes a release. New versions are required for changed public assets.
+
+To enforce validation before merging, configure a GitHub branch rule/ruleset for `main` that requires
+**Verify complete release**, requires the PR branch to be up to date, and blocks bypass/force pushes.
+These workflows do not configure repository branch rules. Without them, direct pushes are still checked
+after the push, but a failed check cannot undo the commit.
 
 ## Desktop updates
 

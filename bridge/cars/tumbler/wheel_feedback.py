@@ -35,6 +35,7 @@ class WheelFeedback:
         self.scales: dict[int, float] = {}
         self.session = uuid.uuid4().hex
         self.task: asyncio.Task[None] | None = None
+        self._closing = False
         self.previous: tuple[int, ...] | None = None
         self.previous_time = 0.0
         self.rest_since: float | None = None
@@ -47,6 +48,7 @@ class WheelFeedback:
     async def start(self) -> None:
         """Observe the calibrated, neutral drivetrain before accepting drive input."""
         if self.task is None or self.task.done():
+            self._closing = False
             self.task = asyncio.create_task(self._read())
         try:
             # Development can use Python 3.9; asyncio.timeout requires 3.11.
@@ -68,6 +70,10 @@ class WheelFeedback:
 
     async def close(self) -> None:
         """Cancel optional reads before the hub is shut down."""
+        # Python 3.9 wait_for can consume cancellation when its inner request
+        # completes in the same event-loop turn. Also request loop termination
+        # so close cannot wait forever for a reader that lost that cancellation.
+        self._closing = True
         if self.task:
             self.task.cancel()
             with suppress(asyncio.CancelledError):
@@ -132,15 +138,19 @@ class WheelFeedback:
 
     async def _read(self) -> None:
         retry_announced = False
-        while True:
+        while not self._closing:
             try:
                 for port in self.ports:
+                    if self._closing:
+                        return
                     if not await self._configure_port(port):
                         return
                 if retry_announced:
                     self.log("Wheel encoder reads recovered.")
                     retry_announced = False
                 for port in self.ports:
+                    if self._closing:
+                        return
                     # Information type 0 requests the current value, including
                     # stationary positions. Never send motor output commands.
                     await asyncio.wait_for(self.hub.request_port_info(port, 0), timeout=READ_TIMEOUT_S)

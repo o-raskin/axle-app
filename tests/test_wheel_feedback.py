@@ -150,6 +150,89 @@ def test_encoder_setup_and_polling_use_readonly_messages_even_when_status_drains
     asyncio.run(run())
 
 
+def test_close_stops_reader_when_an_immediately_completed_request_consumes_cancellation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def run() -> None:
+        hub, wheels = feedback()
+        hub.input_modes = {50: 2, 51: 2}
+        closing: asyncio.Task[None] | None = None
+        closing_started = asyncio.Event()
+        cleanup = asyncio.Event()
+        requested = []
+
+        async def request(port: int, _kind: int = 1) -> None:
+            nonlocal closing
+            requested.append(port)
+            if closing is None:
+                # The inner wait_for request finishes before the close task's
+                # cancellation reaches its outer reader. Python 3.9 loses this
+                # cancellation; the reader must honor its shutdown request too.
+                closing = asyncio.create_task(wheels.close())
+                closing_started.set()
+            elif cleanup.is_set():
+                await asyncio.Event().wait()
+
+        monkeypatch.setattr(hub, "request_port_info", request)
+        wheels.task = asyncio.create_task(wheels._read())
+        try:
+            await closing_started.wait()
+            assert closing is not None
+            done, _ = await asyncio.wait({closing}, timeout=0.5)
+            assert closing in done, "Encoder close must not wait forever after lost cancellation"
+            await closing
+            assert wheels.task.done()
+            assert requested == [50], "Shutdown must prevent further hub reads"
+        finally:
+            # Keep a failing regression bounded even on the buggy minimum
+            # runtime: block future inner requests before cancelling again.
+            cleanup.set()
+            wheels.task.cancel()
+            retry_cancel = asyncio.get_running_loop().call_later(0.01, wheels.task.cancel)
+            pending = {wheels.task}
+            if closing is not None:
+                pending.add(closing)
+            try:
+                _, remaining = await asyncio.wait(pending, timeout=0.5)
+                assert not remaining, "Regression cleanup must not leak an encoder or close task"
+            finally:
+                retry_cancel.cancel()
+
+    asyncio.run(run())
+
+
+def test_reader_can_restart_after_a_completed_close(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def run() -> None:
+        hub, wheels = feedback()
+        hub.input_modes = {50: 2, 51: 2}
+        reads = []
+        polled = asyncio.Event()
+
+        async def request(port: int, _kind: int = 1) -> None:
+            reads.append(port)
+            if port == 51:
+                polled.set()
+
+        async def observe() -> None:
+            await polled.wait()
+
+        monkeypatch.setattr(hub, "request_port_info", request)
+        monkeypatch.setattr(wheels, "_observe_rest", observe)
+        await wheels.start()
+        first = wheels.task
+        await wheels.close()
+        assert reads == [50, 51]
+        polled.clear()
+        await wheels.start()
+        assert wheels.task is not first
+        assert reads == [50, 51, 50, 51], "Restart must resume both real encoder reads"
+        await wheels.close()
+        assert first is not None and first.done()
+        assert wheels.task is not None and wheels.task.done()
+
+    asyncio.run(run())
+
+
 def test_live_session_publishes_encoder_travel_to_real_json_protocol(monkeypatch: pytest.MonkeyPatch) -> None:
     hub = SimpleNamespace(hub_name="Technic Move", attached_devices={}, is_connected=True, port_values={})
     calls = 0
