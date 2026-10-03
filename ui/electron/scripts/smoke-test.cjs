@@ -202,9 +202,20 @@ async function launch(scenario = "normal") {
   return page;
 }
 
-async function screenshot(name) {
+async function screenshot(name, fullPage = true) {
   const file = path.join(output, `${name}.png`);
-  await activePage.screenshot({ path: file, fullPage: true });
+  const dialog = activePage.locator("dialog[open]");
+  if (await dialog.count()) await dialog.evaluate(async (element) => {
+    await Promise.all(element.getAnimations().map((animation) => animation.finished));
+  });
+  if (fullPage) await activePage.screenshot({ path: file, fullPage });
+  else {
+    // Browser screenshots can double-apply Electron's native zoom or clear an
+    // idle WebGL buffer. Capture the actual compositor for viewport evidence.
+    const png = await activeApp.evaluate(async ({ BrowserWindow }) =>
+      (await BrowserWindow.getAllWindows()[0].webContents.capturePage()).toPNG().toString("base64"));
+    await fs.writeFile(file, Buffer.from(png, "base64"));
+  }
   screenshots.push(file);
 }
 
@@ -310,10 +321,9 @@ async function run() {
     assert.equal(await page.getByRole("button", { name: /connect vehicle|start driving|start engine|stop searching|stop driving/i }).count(), 0);
     assert.equal(await page.getByLabel("Vehicle model", { exact: true }).count(), 0);
     const dialog = await settingsDialog();
-    const model = dialog.getByLabel("Vehicle model", { exact: true });
-    assert.equal(await model.isEnabled(), true);
-    assert.equal(await model.locator("option").count(), 1);
-    await model.selectOption("tumbler");
+    assert.equal(await dialog.getByLabel("Vehicle model", { exact: true }).count(), 0,
+      "A single supported vehicle must not ask the user to make a choice");
+    await visible(dialog.getByText("42239 Batmobile Tumbler", { exact: true }));
     await page.keyboard.press("Escape");
     assert.equal(await page.getByLabel("Vehicle model", { exact: true }).count(), 0);
     await noHorizontalOverflow();
@@ -337,6 +347,23 @@ async function run() {
     await page.waitForFunction(() => document.querySelector(".tumbler-viewer")?.getAttribute("data-live") === "true");
     assert.equal((await fixture("calls")).filter((call) => call.method === "startBridge").length, 1);
   });
+  await checkpoint("Bluetooth, preparation, impact and disconnect states give useful next steps", async () => {
+    await fixture("stopTelemetry");
+    await fixture("event", { type: "setup/progress", stage: "waiting_for_bluetooth", title: "Raw setup", message: "Waiting", steps: [] });
+    await visible(page.getByRole("heading", { name: "Turn on Bluetooth", exact: true }));
+    await screenshot("35-bluetooth-off");
+    await fixture("setup");
+    await visible(page.getByRole("heading", { name: "Preparing your vehicle", exact: true }));
+    await streamTumblerTelemetry({ crash: true });
+    await visible(page.getByRole("heading", { name: "A moment to reset", exact: true }));
+    await screenshot("36-impact-pause");
+    await fixture("stopTelemetry");
+    await fixture("setup", { controller: false, vehicle: true, ready: false });
+    await visible(page.getByRole("heading", { name: "Let’s reconnect", exact: true }));
+    await screenshot("37-controller-disconnected");
+    await fixture("setup");
+    await streamTumblerTelemetry();
+  });
   await checkpoint("Changing controller safely hands over the active session", async () => {
     const dialog = await settingsDialog();
     await assertFocusInsideDialog();
@@ -355,6 +382,92 @@ async function run() {
     await page.waitForFunction(() => window.__AXLE_TEST__.calls().filter((call) => call.method === "startBridge").length === 3);
     await page.waitForFunction(() => window.__AXLE_TEST__.snapshot().status === "running");
     assert.equal(await page.locator(".tumbler-viewer").getAttribute("data-live"), "false");
+  });
+  await checkpoint("Advanced connection edits apply together and discarded drafts leave driving alone", async () => {
+    const dialog = await settingsDialog();
+    await dialog.getByText("Advanced connection", { exact: false }).click();
+    const name = dialog.getByLabel("Hub name", { exact: true });
+    const address = dialog.getByLabel(/Bluetooth address/);
+    const before = (await fixture("calls")).filter((call) => call.method === "startBridge").length;
+    await name.fill("My vehicle");
+    await address.fill("fixture-address");
+    await page.waitForTimeout(700);
+    assert.equal((await fixture("calls")).filter((call) => call.method === "startBridge").length, before,
+      "Typing connection overrides must not interrupt a live session");
+    await address.press("Enter");
+    await page.waitForFunction((before) => window.__AXLE_TEST__.calls().filter((call) => call.method === "startBridge").length === before + 1, before);
+    const calls = await fixture("calls");
+    assert.equal(calls.filter((call) => call.method === "startBridge").at(-1).payload.hubName, "My vehicle");
+    assert.equal(calls.filter((call) => call.method === "startBridge").at(-1).payload.hubAddress, "fixture-address");
+    await visible(dialog.getByText("Connection settings applied.", { exact: true }));
+    await dialog.getByText("Connection settings applied.", { exact: true }).scrollIntoViewIfNeeded();
+    await screenshot("30-advanced-connection");
+    await name.fill("Unapplied draft");
+    await page.keyboard.press("Escape");
+    const reopened = await settingsDialog();
+    await reopened.getByText("Advanced connection", { exact: false }).click();
+    assert.equal(await reopened.getByLabel("Hub name", { exact: true }).inputValue(), "My vehicle");
+    assert.equal((await fixture("calls")).filter((call) => call.method === "startBridge").length, before + 1);
+    await page.keyboard.press("Escape");
+  });
+  await checkpoint("The guide explains automatic setup and a deliberate Stop stays paused until Resume", async () => {
+    await fixture("setup");
+    await streamTumblerTelemetry();
+    await page.getByRole("button", { name: "How to drive", exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: "How to drive", exact: true });
+    await visible(dialog);
+    assert.match(await dialog.innerText(), /Axle.*automatically/);
+    assert.doesNotMatch(await dialog.innerText(), /select Connect vehicle/);
+    await page.keyboard.press("Tab");
+    await assertFocusInsideDialog();
+    await screenshot("31-driving-guide");
+    await dialog.getByRole("button", { name: "Stop session", exact: true }).click();
+    await visible(dialog.getByText("Connection paused. Close this guide to resume from Drive.", { exact: true }));
+    await fixture("stopTelemetry");
+    await page.keyboard.press("Escape");
+    await visible(page.getByRole("button", { name: "Resume connection", exact: true }));
+    const starts = (await fixture("calls")).filter((call) => call.method === "startBridge").length;
+    await page.waitForTimeout(3400);
+    assert.equal((await fixture("calls")).filter((call) => call.method === "startBridge").length, starts);
+    assert.equal((await fixture("snapshot")).status, "exited");
+    await screenshot("32-connection-paused", false);
+    const settings = await settingsDialog();
+    await settings.getByLabel("Controller profile").selectOption("xbox");
+    await page.keyboard.press("Escape");
+    await page.getByRole("button", { name: "Resume connection", exact: true }).click();
+    await page.waitForFunction((starts) => window.__AXLE_TEST__.calls().filter((call) => call.method === "startBridge").length === starts + 1, starts);
+    assert.equal((await fixture("calls")).filter((call) => call.method === "startBridge").at(-1).payload.gamepadId, "xbox",
+      "Resume must use the latest settings even before their debounce expires");
+    await page.waitForTimeout(700);
+    assert.equal((await fixture("calls")).filter((call) => call.method === "startBridge").length, starts + 1);
+  });
+  await checkpoint("Failed Stop explains recovery in the guide and permits a successful retry", async () => {
+    await page.waitForFunction(() => window.__AXLE_TEST__.snapshot().status === "running");
+    await fixture("configure", { stopFailure: true });
+    await page.getByRole("button", { name: "How to drive", exact: true }).click();
+    const dialog = page.getByRole("dialog");
+    await dialog.getByRole("button", { name: "Stop session", exact: true }).click();
+    await visible(dialog.getByRole("alert"));
+    assert.match(await dialog.getByRole("alert").innerText(), /Try Stop again|turn off the vehicle/);
+    await fixture("configure", { stopFailure: false });
+    await dialog.getByRole("button", { name: "Stop session", exact: true }).click();
+    await visible(dialog.getByText(/Connection paused/));
+    await page.keyboard.press("Escape");
+    await page.getByRole("button", { name: "Resume connection", exact: true }).click();
+  });
+  await checkpoint("Fullscreen failures roll back the switch with an accessible explanation", async () => {
+    const dialog = await settingsDialog();
+    const fullscreen = dialog.getByRole("switch", { name: /Fullscreen/ });
+    await fixture("configure", { settingsFailure: true });
+    await fullscreen.click();
+    await visible(dialog.getByRole("alert"));
+    assert.equal(await fullscreen.isChecked(), false);
+    await fixture("configure", { settingsFailure: false });
+    await fullscreen.check();
+    await page.waitForFunction(() => document.querySelector('dialog input[role="switch"]:checked') !== null);
+    assert.equal(await dialog.getByRole("alert").count(), 0);
+    await screenshot("33-settings");
+    await page.keyboard.press("Escape");
   });
   await checkpoint("Renderer reload adopts an existing live session", async () => {
     page = await launch("reload-live-slow-profiles");
@@ -376,12 +489,31 @@ async function run() {
     const dialog = await settingsDialog();
     await dialog.getByRole("switch", { name: /Developer mode/ }).check();
     await dialog.getByRole("button", { name: /Open diagnostics/ }).click();
+    await page.waitForFunction(() => document.activeElement?.id === "main");
     await page.getByRole("button", { name: "Stop session", exact: true }).click();
     await page.getByRole("button", { name: /Test controller input/ }).click();
     await page.waitForFunction(() => window.__AXLE_TEST__.snapshot().operation === "probeGamepad" && window.__AXLE_TEST__.snapshot().status === "running");
     await page.getByRole("button", { name: "Drive", exact: true }).click();
     await page.waitForFunction(() => window.__AXLE_TEST__.snapshot().operation === "live" && window.__AXLE_TEST__.snapshot().status === "running");
     assert.equal((await fixture("calls")).filter((call) => call.method === "runBridgeCommand").length, 1);
+  });
+  await checkpoint("All diagnostic checks retain results when event history is cleared", async () => {
+    await page.getByRole("button", { name: "Diagnostics", exact: true }).click();
+    for (const [name, kind] of [["Find controllers", "gamepadDevices"], ["Find audio devices", "audioDevices"], ["Inspect vehicle", "scanHub"]]) {
+      const stop = page.getByRole("button", { name: "Stop session", exact: true });
+      if (await stop.count()) await stop.click();
+      await page.getByRole("button", { name: new RegExp(name) }).click();
+      await page.waitForFunction((kind) => window.__AXLE_TEST__.snapshot().operation === kind && window.__AXLE_TEST__.snapshot().status === "running", kind);
+      await fixture("complete", kind);
+      await visible(page.locator(".debug-content summary").filter({ hasText: `${kind} · Completed` }));
+    }
+    await page.getByRole("button", { name: /Events/ }).click();
+    await page.getByRole("button", { name: "Clear", exact: true }).click();
+    await visible(page.getByText("No events yet", { exact: true }));
+    await page.getByRole("button", { name: "Results", exact: true }).click();
+    assert.equal(await page.locator(".debug-content summary").filter({ hasText: /Completed/ }).count(), 3);
+    await screenshot("34-diagnostics");
+    await page.getByRole("button", { name: "Drive", exact: true }).click();
   });
 
   await checkpoint("Tumbler renders real 3D and keeps camera controls reachable", async () => {
@@ -511,6 +643,35 @@ async function run() {
     await resize(1280, 800);
     await canvas.scrollIntoViewIfNeeded();
     await cameraSettled();
+  });
+
+  await checkpoint("Minimum window and 200 percent zoom keep actions, dialogs and diagnostics reachable", async () => {
+    await resize(760, 600);
+    await noHorizontalOverflow();
+    await activeApp.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].webContents.setZoomFactor(2));
+    await page.waitForFunction(() => innerWidth === 380);
+    await noHorizontalOverflow();
+    const exit = page.getByRole("button", { name: "Quit Axle", exact: true });
+    await exit.scrollIntoViewIfNeeded();
+    const bounds = await exit.boundingBox();
+    assert.ok(bounds && bounds.x >= 0 && bounds.x + bounds.width <= 380);
+    await screenshot("38-zoom-200-drive", false);
+    const dialog = await settingsDialog();
+    await noHorizontalOverflow();
+    const dialogBounds = await dialog.boundingBox();
+    assert.ok(dialogBounds && dialogBounds.x >= 0 && dialogBounds.x + dialogBounds.width <= 380);
+    await dialog.getByRole("switch", { name: /Developer mode/ }).check();
+    await page.keyboard.press("Tab");
+    await assertFocusInsideDialog();
+    await dialog.getByRole("button", { name: /Open diagnostics/ }).click();
+    await page.waitForFunction(() => document.activeElement?.id === "main");
+    await noHorizontalOverflow();
+    await screenshot("39-zoom-200-diagnostics", false);
+    await page.getByRole("button", { name: "Drive", exact: true }).click();
+    await page.waitForFunction(() => window.__AXLE_TEST__.snapshot().operation === "live" && window.__AXLE_TEST__.snapshot().status === "running");
+    await activeApp.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].webContents.setZoomFactor(1));
+    await resize(1280, 800);
+    await page.waitForFunction(() => document.querySelector(".tumbler-viewer canvas")?.dataset.cameraMoving === "false");
   });
 
   await checkpoint("Camera transitions keep wall-clock timing at low frame rates and after idle", async () => {
@@ -899,6 +1060,8 @@ async function run() {
     assert.equal(await page.locator(".tumbler-viewer").getAttribute("data-live"), "true", "Encoder expiry must occur before the longer control-feedback timeout");
     assert.equal(await canvasValue("data-wheel-angular-velocity"), 0, "Silent encoders must stop immediately without extrapolating drive power");
     await page.waitForFunction(() => document.querySelector(".tumbler-viewer")?.getAttribute("data-live") === "false");
+    await visible(page.getByRole("heading", { name: "Checking your connection", exact: true }));
+    assert.equal(await page.locator(".status-pill--ready").count(), 0);
     await page.waitForFunction(() => Number(document.querySelector(".tumbler-viewer canvas")?.getAttribute("data-wheel-angular-velocity")) === 0);
     const staleRotation = await canvasValue("data-wheel-rotation");
     const staleTravel = await canvasValue("data-street-travel");
@@ -909,6 +1072,9 @@ async function run() {
     assert.ok(await canvasValue("data-boost-intensity") < 0.1);
     const staleReverse = (await page.locator(".tumbler-viewer canvas").getAttribute("data-reverse-light-intensities")).split(",").map(Number);
     assert.ok(staleReverse.every((value) => value < 0.1), "Stale feedback must also turn green reverse lamps off");
+    await screenshot("40-feedback-paused");
+    await streamTumblerTelemetry();
+    await visible(page.getByRole("heading", { name: "Ready to drive", exact: true }));
   });
 
   await checkpoint("Reduced motion retains live pose without revolving wheels or automatic camera", async () => {
@@ -939,6 +1105,7 @@ async function run() {
     await fixture("setup");
     await tumblerTelemetry({ model_name: "42160 Rally Car", steering: 80, throttle: 90 });
     assert.equal(await page.locator(".tumbler-viewer").getAttribute("data-live"), "false");
+    assert.equal(await page.locator(".status-pill--ready").count(), 0, "Other-model feedback must never declare the selected car ready");
     await streamTumblerTelemetry({ front_lights_on: true });
     await page.waitForFunction(() => document.querySelector(".tumbler-viewer")?.getAttribute("data-live") === "true");
     assert.equal(await page.getByLabel("Vehicle model", { exact: true }).count(), 0);

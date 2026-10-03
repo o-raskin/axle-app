@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { ControlsDialog } from "./components/ControlsDialog";
 import { controllerControls } from "./components/controllerControls";
@@ -29,11 +29,13 @@ function App() {
   const [showDebug, setShowDebug] = useState(false);
   const [debugTab, setDebugTab] = useState<DiagnosticTab>("results");
   const [page, setPage] = useState<"drive" | "diagnostics">("drive");
+  const focusPage = useRef(false);
   const bridge = useBridgeController(page === "drive");
   const [exiting, setExiting] = useState(false);
   const [exitError, setExitError] = useState<string | null>(null);
   const { connection } = bridge;
   const ready = connection.phase === "ready";
+  const paused = bridge.connectionPaused && !bridge.bridgeActive && !bridge.actionError;
   const busy = connection.phase === "connecting" || connection.phase === "stopping";
   const impactPaused = ready && bridge.telemetry?.crash === true;
   const vehicleNearby = bridge.discoveryActive && Boolean(bridge.discovery?.vehicleName);
@@ -48,11 +50,13 @@ function App() {
     receivedAt: bridge.telemetryReceivedAt
   });
   const controls = controllerControls(bridge.selectedGamepad);
-  const statusText = impactPaused ? "Control paused" : connectionStatusLabels[connection.phase];
+  const statusText = paused ? "Paused" : impactPaused ? "Control paused" : connectionStatusLabels[connection.phase];
   const connectionTitle = bridge.profileError
     ? "A little setup needed"
-    : impactPaused ? "A moment to reset" : connection.title;
-  const connectionDescription = bridge.profileError || (impactPaused
+    : paused ? "Connection paused" : impactPaused ? "A moment to reset" : connection.title;
+  const connectionDescription = bridge.profileError || (paused
+    ? "Resume when you’re ready. Keep the wheels clear while your vehicle gets ready again."
+    : impactPaused
     ? "An impact was detected. Release the triggers while your vehicle resets."
     : connection.description);
 
@@ -61,6 +65,19 @@ function App() {
       setPage("drive");
     }
   }, [showDebug]);
+
+  useEffect(() => {
+    if (!focusPage.current) return;
+    focusPage.current = false;
+    const frame = requestAnimationFrame(() => document.getElementById("main")?.focus());
+    return () => cancelAnimationFrame(frame);
+  }, [page]);
+
+  function navigateTo(nextPage: "drive" | "diagnostics") {
+    if (nextPage === page) return;
+    focusPage.current = true;
+    setPage(nextPage);
+  }
 
   async function quitApp() {
     if (exiting) return;
@@ -85,9 +102,12 @@ function App() {
 
   function renderConnectionAction() {
     if (bridge.profileError) return <button type="button" className="button button--primary" onClick={bridge.retryInitialization}>Try again</button>;
+    if (bridge.connectionPaused && !bridge.bridgeActive) return <button type="button" className="button button--primary" onClick={bridge.resumeConnection}>Resume connection <Icon name="arrow" /></button>;
+    if (bridge.connectionPaused && bridge.canStop) return <button type="button" className="button button--stop" onClick={bridge.stopBridge}>{bridge.actionError ? "Try Stop again" : "Stop session"}</button>;
     return <p className="small-note" role="status">{ready
-      ? "Ready to drive. Use your controller."
-      : "Axle connects and reconnects your devices automatically."}</p>;
+      ? "Axle reconnects automatically if a device disconnects."
+      : bridge.connectionPaused ? "Automatic connection is paused."
+        : "Axle connects and reconnects your devices automatically."}</p>;
   }
 
   if (bridge.loading) {
@@ -133,34 +153,32 @@ function App() {
 
   const pageTitle = page === "diagnostics"
     ? "Diagnostics"
-    : impactPaused ? "A moment to reset." : ready ? "You’re in control." : "Let’s drive.";
+    : paused ? "Take your time." : impactPaused ? "A moment to reset." : ready ? "You’re in control." : "Let’s drive.";
 
   return (
     <div className={`app-shell ${bridge.bootstrapState.platform === "darwin" ? "app-shell--mac" : ""}`}>
       {bridge.bootstrapState.platform === "darwin" && <div className="window-drag-region" aria-hidden="true" />}
       <header className="app-header">
-        <a className="brand" href="#main" aria-label="Axle home" onClick={() => setPage("drive")}>
+        <a className="brand" href="#main" aria-label="Axle home" onClick={() => navigateTo("drive")}>
           <span className="brand-mark" aria-hidden="true"><span /><span /></span>
           <span>axle<span className="brand-dot">.</span></span>
         </a>
-        <nav className="navigation" aria-label="Main navigation">
+        {showDebug && <nav className="navigation" aria-label="Main navigation">
           <button
             type="button"
             aria-current={page === "drive" ? "page" : undefined}
-            onClick={() => setPage("drive")}
+            onClick={() => navigateTo("drive")}
           >
             Drive
           </button>
-          {showDebug && (
-            <button
-              type="button"
-              aria-current={page === "diagnostics" ? "page" : undefined}
-              onClick={() => setPage("diagnostics")}
-            >
-              Diagnostics
-            </button>
-          )}
-        </nav>
+          <button
+            type="button"
+            aria-current={page === "diagnostics" ? "page" : undefined}
+            onClick={() => navigateTo("diagnostics")}
+          >
+            Diagnostics
+          </button>
+        </nav>}
         <div className="header-actions">
           <button type="button" className="text-button help-button" aria-label="How to drive" onClick={() => setSheet("controls")}>
             <Icon name="help" /><span>How to drive</span>
@@ -178,12 +196,12 @@ function App() {
         </div>
       </header>
 
-      <main id="main" className="workspace" tabIndex={-1}>
+      <main id="main" className="workspace" tabIndex={-1} aria-labelledby="page-title">
         {exitNotice}
         <div className="page-heading">
           <div>
             <p className="eyebrow">{page === "drive" ? "GOOD TIMES. BUILT BY YOU." : "A CLOSER LOOK"}</p>
-            <h1>{pageTitle}</h1>
+            <h1 id="page-title">{pageTitle}</h1>
           </div>
           <span
             className={`status-pill ${ready && !impactPaused ? "status-pill--ready" : ""} ${impactPaused ? "status-pill--warning" : ""} ${busy ? "status-pill--busy" : ""}`}
@@ -199,7 +217,6 @@ function App() {
               <section className={`vehicle-card ${ready ? "vehicle-card--connected" : ""} ${tumbler ? "vehicle-card--3d" : ""}`} aria-label="Your vehicle">
                 <div className="vehicle-card__heading">
                   <span className="eyebrow">YOUR VEHICLE</span>
-                  <span className="vehicle-tag">{tumbler ? "INTERACTIVE 3D" : "GAMEPAD CONTROL"}</span>
                 </div>
                 {tumbler
                   ? <TumblerViewer state={vehicleState} receivedAt={bridge.telemetryReceivedAt}
@@ -222,7 +239,7 @@ function App() {
                 aria-labelledby="connection-heading"
               >
                 <div className={`connection-icon ${ready && !impactPaused ? "connection-icon--ready" : ""}`}>
-                  <Icon name={impactPaused ? "pause" : ready ? "check" : connection.phase === "error" ? "warning" : "bluetooth"} size={25} />
+                  <Icon name={paused || impactPaused ? "pause" : ready ? "check" : connection.phase === "error" ? "warning" : "bluetooth"} size={25} />
                 </div>
                 <div className="connection-copy" aria-live="polite" aria-atomic="true">
                   <h2 id="connection-heading">{connectionTitle}</h2>
@@ -265,7 +282,8 @@ function App() {
                 <div className="connection-actions">
                   {renderConnectionAction()}
                   <p className="connection-footnote">
-                    {ready
+                    {paused ? "Your connection stays paused until you resume."
+                      : ready
                       ? "Keep the app open while you drive."
                       : bridge.bridgeActive
                         ? "Keep your controller and vehicle nearby."
@@ -314,7 +332,7 @@ function App() {
           onDebugChange={setShowDebug}
           onOpenDiagnostics={() => {
             setSheet(null);
-            setPage("diagnostics");
+            navigateTo("diagnostics");
           }}
           onClose={() => setSheet(null)}
         />

@@ -51,6 +51,7 @@ export function useBridgeController(automaticEnabled = true) {
   const [initializationAttempt, setInitializationAttempt] = useState(0);
   const [liveTelemetryReceived, setLiveTelemetryReceived] = useState(false);
   const [sessionWasReady, setSessionWasReady] = useState(false);
+  const [connectionPaused, setConnectionPaused] = useState(false);
   const [discovery, setDiscovery] = useState<DiscoveryState | null>(null);
   const [discoveryReceivedAt, setDiscoveryReceivedAt] = useState<number | null>(null);
 
@@ -97,19 +98,22 @@ export function useBridgeController(automaticEnabled = true) {
     if (snapshot.status !== "running" || snapshot.operation !== "live") {
       setTelemetryReceivedAt(null);
     }
+    const errorContext = snapshot.operation && snapshot.operation !== "live" && snapshot.operation !== "discover"
+      ? "diagnostic" : "connection";
     if (snapshot.error) {
       appendDiagnostic("Connection status", snapshot.error);
-      setActionError((current) => current ?? friendlyError(snapshot.error));
+      setActionError((current) => current ?? friendlyError(snapshot.error, errorContext));
     } else if (snapshot.status === "error") {
-      setActionError((current) => current ?? friendlyError("Connection failed"));
+      setActionError((current) => current ?? friendlyError("Connection failed", errorContext));
     }
   }, [appendDiagnostic]);
 
   useEffect(() => {
-    automaticEnabledRef.current = automaticEnabled;
-    automaticSession.current?.setEnabled(automaticEnabled);
-    if (automaticEnabled) void automaticSession.current?.reconcile();
-  }, [automaticEnabled]);
+    const enabled = automaticEnabled && !connectionPaused;
+    automaticEnabledRef.current = enabled;
+    automaticSession.current?.setEnabled(enabled);
+    if (enabled) void automaticSession.current?.reconcile();
+  }, [automaticEnabled, connectionPaused]);
 
   useEffect(() => {
     let alive = true;
@@ -168,7 +172,9 @@ export function useBridgeController(automaticEnabled = true) {
         } else if (event.type === "error") {
           setTelemetryReceivedAt(null);
           appendDiagnostic(event.errorType, event.message);
-          setActionError(friendlyError(`${event.errorType}: ${event.message}`));
+          setActionError(friendlyError(`${event.errorType}: ${event.message}`,
+            currentSnapshot.operation && currentSnapshot.operation !== "live" && currentSnapshot.operation !== "discover"
+              ? "diagnostic" : "connection"));
         } else if (event.type === "exit") {
           setTelemetryReceivedAt(null);
         }
@@ -338,7 +344,7 @@ export function useBridgeController(automaticEnabled = true) {
       if (!mounted.current) return;
       if (!result.ok) {
         appendDiagnostic("Starting connection", result.message ?? "Action rejected");
-        setActionError(friendlyError(result.message ?? "Action rejected"));
+        setActionError(friendlyError(result.message ?? "Action rejected", kind === "live" ? "connection" : "diagnostic"));
       } else if (statusRevision.current === revisionBeforeStart) {
         // Normal IPC publishes status first. Keep an accepted request locked if that event is delayed.
         receiveStatus({ status: "starting", operation: kind, sessionId: result.sessionId });
@@ -346,7 +352,7 @@ export function useBridgeController(automaticEnabled = true) {
     } catch (error) {
       if (mounted.current) {
         appendDiagnostic("Starting connection", error);
-        setActionError(friendlyError(error));
+        setActionError(friendlyError(error, kind === "live" ? "connection" : "diagnostic"));
       }
     } finally {
       startPending.current = false;
@@ -357,6 +363,14 @@ export function useBridgeController(automaticEnabled = true) {
   const stopBridge = async (): Promise<void> => {
     if (stopPending.current || !isProcessActive(snapshotRef.current)
       || (snapshotRef.current.status === "stopping" && !actionError)) return;
+    // A deliberate Stop on Drive must outlast the automatic retry timer. Pause
+    // synchronously so a pending handover cannot start another drive worker.
+    // Diagnostics already disables automatic driving and retains its own flow.
+    if (automaticEnabledRef.current) {
+      automaticEnabledRef.current = false;
+      automaticSession.current?.setEnabled(false);
+      setConnectionPaused(true);
+    }
     const wasDiscovery = snapshotRef.current.operation === "discover";
     stopPending.current = true;
     setPendingAction("stop");
@@ -369,8 +383,9 @@ export function useBridgeController(automaticEnabled = true) {
         appendDiagnostic("Stopping connection", result.message ?? "Stop rejected");
         setActionError(friendlyError(result.message ?? "Stop rejected", "stop"));
       } else {
-        setActionMessage(wasDiscovery ? "Device search stopped. Start driving whenever you’re ready."
-          : "Control stopped. You can connect again whenever you’re ready.");
+        setActionMessage(wasDiscovery ? "Device search stopped."
+          : automaticEnabled ? "Control stopped. Resume the connection whenever you’re ready."
+            : "Session stopped. Choose another check, or return to Drive.");
         const revisionBeforeRefresh = statusRevision.current;
         const snapshot = await window.legoBridgeUi.getBridgeStatus();
         if (mounted.current && statusRevision.current === revisionBeforeRefresh) receiveStatus(snapshot);
@@ -386,6 +401,22 @@ export function useBridgeController(automaticEnabled = true) {
     }
   };
 
+  const resumeConnection = (): void => {
+    if (stopPending.current || snapshotRef.current.status === "stopping"
+      || loading || startupError || profileError || !profiles || !settings || !selectedModel || !selectedGamepad) return;
+    setActionError(null);
+    setActionMessage(null);
+    setConnectionPaused(false);
+    const session = automaticSession.current;
+    // Resume with the current preferences even when their debounced update has
+    // not run yet. Configure while paused so only the latest worker can start.
+    session?.setEnabled(false);
+    session?.configure({ modelId: selectedModel, gamepadId: selectedGamepad, hubName, hubAddress });
+    automaticEnabledRef.current = automaticEnabled;
+    session?.setEnabled(automaticEnabled);
+    if (automaticEnabled) void session?.reconcile();
+  };
+
   const bridgeActive = isProcessActive(bridgeStatus) || pendingAction !== null;
   const canStop = isProcessActive(bridgeStatus) && pendingAction !== "stop"
     && (bridgeStatus.status !== "stopping" || Boolean(actionError));
@@ -398,6 +429,8 @@ export function useBridgeController(automaticEnabled = true) {
     progress: currentProgress,
     pendingAction,
     liveTelemetryReceived,
+    liveTelemetryFresh: telemetryReceivedAt !== null
+      && telemetry?.model_name === profiles?.models.find((model) => model.id === selectedModel)?.name,
     sessionWasReady,
     actionError
   });
@@ -407,12 +440,13 @@ export function useBridgeController(automaticEnabled = true) {
     selectedModel, setSelectedModel, selectedGamepad, setSelectedGamepad, hubName, setHubName,
     hubAddress, setHubAddress, loading, startupError, profileError, settingsError, actionError, actionMessage,
     bridgeActive, canStop, controlsDisabled, pendingAction, connection, settingsSaving,
+    connectionPaused, resumeConnection,
     commandResults, lastCommandResult: commandResults.at(-1) ?? null,
     retryInitialization, updateFullscreen,
     startLiveControl: (): Promise<void> => runAction("live"),
     runBridgeCommand: (kind: BridgeCommandKind): Promise<void> => runAction(kind),
     stopBridge,
     clearLogs: (): void => setLogs([]),
-    clearEvents: (): void => { setProtocolEvents([]); setCommandResults([]); }
+    clearEvents: (): void => setProtocolEvents([])
   };
 }

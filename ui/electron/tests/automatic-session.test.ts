@@ -115,6 +115,53 @@ test("opening diagnostics during shutdown prevents the pending driving handover"
   assert.deepEqual(h.calls, ["tumbler", "stop", "next"]);
 });
 
+test("a user pause persists through an exited worker and changed settings until explicit resume", async () => {
+  const h = harness(); h.session.configure(options()); await tick();
+  h.session.setEnabled(false);
+  await h.api.stopBridge();
+  h.session.configure({ ...options(), gamepadId: "dualsense", hubName: "My vehicle" });
+  await h.session.reconcile(Date.now() + 10000);
+  assert.deepEqual(h.calls, ["tumbler", "stop"]);
+  h.session.setEnabled(true); await h.session.reconcile();
+  assert.deepEqual(h.calls, ["tumbler", "stop", "tumbler"]);
+});
+
+test("pausing while automatic status is pending prevents a queued connection", async () => {
+  const h = harness();
+  let complete!: (snapshot: BridgeProcessSnapshot) => void;
+  h.api.getBridgeStatus = () => new Promise((resolve) => { complete = resolve; });
+  h.session.configure(options());
+  h.session.setEnabled(false);
+  complete({ status: "idle" }); await tick();
+  assert.deepEqual(h.calls, []);
+});
+
+test("an old automatic failure cannot replace user feedback after a pause", async () => {
+  const h = harness();
+  let fail!: (error: Error) => void;
+  h.api.startBridge = () => new Promise((_resolve, reject) => { fail = reject; });
+  h.session.configure(options()); await tick();
+  h.session.setEnabled(false);
+  fail(new Error("Delayed automatic connection failure")); await tick();
+  assert.deepEqual(h.errors, []);
+});
+
+test("pausing an accepted automatic start prevents a pending settings handover", async () => {
+  const h = harness();
+  let finish!: () => void;
+  const gate = new Promise<void>((resolve) => { finish = resolve; });
+  const start = h.api.startBridge;
+  h.api.startBridge = async (value) => { await gate; return start(value); };
+  h.session.configure(options()); await tick();
+  h.session.configure(options("latest"));
+  h.session.setEnabled(false); finish(); await tick();
+  await h.api.stopBridge();
+  await h.session.reconcile(Date.now() + 10000);
+  assert.deepEqual(h.calls, ["tumbler", "stop"]);
+  h.session.setEnabled(true); await h.session.reconcile();
+  assert.deepEqual(h.calls, ["tumbler", "stop", "latest"]);
+});
+
 test("a selection change while starting stops the accepted worker before applying the newest choice", async () => {
   const h = harness();
   let finish!: () => void;

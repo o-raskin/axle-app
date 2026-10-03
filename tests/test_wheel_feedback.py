@@ -173,7 +173,10 @@ def test_close_stops_reader_when_an_immediately_completed_request_consumes_cance
             elif cleanup.is_set():
                 await asyncio.Event().wait()
 
-        monkeypatch.setattr(hub, "request_port_info", request)
+        # Keep the inner request in its own task, as Python 3.9 wait_for does.
+        # Python 3.12 awaits coroutines inline, so an immediate request would
+        # otherwise poll both ports before the scheduled close can start.
+        monkeypatch.setattr(hub, "request_port_info", lambda port, kind=1: asyncio.create_task(request(port, kind)))
         wheels.task = asyncio.create_task(wheels._read())
         try:
             await closing_started.wait()

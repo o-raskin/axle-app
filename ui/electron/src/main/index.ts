@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, Menu, type MenuItemConstructorOptions, shell } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, Menu, type MenuItemConstructorOptions, shell } from "electron";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 
@@ -23,6 +23,7 @@ let mainWindow: BrowserWindow | null = null;
 let appQuitAfterBridgeStop = false;
 let appQuitPending = false;
 let pendingBridgeShutdown: Promise<void> | null = null;
+let shutdownFailureNotice: Promise<void> | null = null;
 let updates: UpdateController | null = null;
 let startupUpdateChecked = false;
 let updateInstalling = false;
@@ -193,6 +194,28 @@ function stopBridgeBeforeClosing(): Promise<void> {
   return pendingBridgeShutdown;
 }
 
+function showShutdownFailure(): void {
+  if (shutdownFailureNotice) return;
+  const showNotice = async (): Promise<void> => {
+    const options = {
+      type: "error" as const,
+      title: "Axle stayed open",
+      message: "Axle could not confirm that vehicle control stopped.",
+      detail: "The app has stayed open. Try Exit again, or turn off your vehicle before trying again.",
+      buttons: ["OK"],
+      defaultId: 0,
+      noLink: true
+    };
+    try {
+      if (mainWindow && !mainWindow.isDestroyed()) await dialog.showMessageBox(mainWindow, options);
+      else await dialog.showMessageBox(options);
+    } catch (error) {
+      console.error("Could not display the shutdown failure notice", error);
+    }
+  };
+  shutdownFailureNotice = showNotice().finally(() => { shutdownFailureNotice = null; });
+}
+
 function createMainWindow(): void {
   exitRequested = false;
   const settings = desktopSettings().read();
@@ -244,6 +267,7 @@ function createMainWindow(): void {
       closePending = false;
       exitRequested = false;
       console.error("Could not stop the bridge before closing the window", error);
+      showShutdownFailure();
     });
   });
 
@@ -299,6 +323,7 @@ app.on("before-quit", (event) => {
     appQuitPending = false;
     exitRequested = false;
     console.error("Could not stop the bridge before quitting", error);
+    showShutdownFailure();
   });
 });
 

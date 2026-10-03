@@ -17,22 +17,22 @@ export function ControlsDialog({ bridge, onClose }: ControlsDialogProps) {
     ["Reverse", controls.reverse],
     ["Brake", controls.brake],
     ["Boost", controls.boost],
-    ["Speed mode", "D-pad ↑ / ↓"],
+    ["Drive power", "D-pad ↑ / ↓"],
     ["Lights · while stopped", controls.lights],
     ["Flash lights", controls.signal],
-    ["End the drive", controls.exit]
+    ["Restart connection", controls.exit]
   ];
   const subtitle = selectedGamepad && bridge.selectedGamepad !== "auto"
     ? `Controls for ${selectedGamepad.name}.`
     : "Familiar controls for DualSense, Xbox-style controllers and Steam Deck.";
 
   return (
-    <Dialog title="Your hands know the way." subtitle={subtitle} onClose={onClose}>
+    <Dialog title="How to drive" subtitle={subtitle} onClose={onClose}>
       <div className="controls-intro">
         <Icon name="controller" size={42} />
         <p>
           Pair your controller in your computer’s Bluetooth settings, or plug it in with USB.
-          Then turn on the vehicle and select <strong>Connect vehicle</strong>.
+          Turn on your vehicle’s hub. Axle finds your devices and gets the vehicle ready automatically.
         </p>
       </div>
       <dl className="control-mapping">
@@ -45,10 +45,12 @@ export function ControlsDialog({ bridge, onClose }: ControlsDialogProps) {
       </dl>
       <p className="guide-note">
         <Icon name="help" size={18} />
-        Leave room around your vehicle. Its steering moves briefly while it gets ready.
+        Keep the vehicle still with its wheels off the ground during setup. Steering moves briefly;
+        control starts automatically when it’s ready.
       </p>
       {bridge.bridgeActive && (
         <div className="dialog-safety">
+          {bridge.actionError && <p className="notice notice--error" role="alert">{bridge.actionError}</p>}
           <button
             type="button"
             className="button button--stop"
@@ -59,6 +61,9 @@ export function ControlsDialog({ bridge, onClose }: ControlsDialogProps) {
             {bridge.pendingAction === "stop" ? "Stopping…" : "Stop session"}
           </button>
         </div>
+      )}
+      {bridge.connectionPaused && !bridge.bridgeActive && (
+        <p className="guide-note" role="status">Connection paused. Close this guide to resume from Drive.</p>
       )}
     </Dialog>
   );

@@ -24,12 +24,13 @@ function loadTypeScript(filename) {
   return module.exports;
 }
 
-async function desktopHarness(active = true) {
+async function desktopHarness(active = true, { messageBoxFailure = false } = {}) {
   const app = new EventEmitter();
   const windows = [];
   const pendingStops = [];
   const errors = [];
   const externalUrls = [];
+  const messageBoxes = [];
   let stopCalls = 0;
   let quitCompleted = false;
   let updateOptions;
@@ -94,7 +95,19 @@ async function desktopHarness(active = true) {
   }
 
   const imports = {
-    electron: { app, BrowserWindow: Window, ipcMain: { handle: (name, callback) => handlers.set(name, callback) }, Menu: { buildFromTemplate() {}, setApplicationMenu() {} }, shell: { openExternal: async (url) => { externalUrls.push(url); } } },
+    electron: {
+      app, BrowserWindow: Window,
+      dialog: {
+        showMessageBox: async (...args) => {
+          messageBoxes.push({ parent: args.length === 2 ? args[0] : null, options: args.at(-1) });
+          if (messageBoxFailure) throw new Error("Message box unavailable");
+          return { response: 0 };
+        }
+      },
+      ipcMain: { handle: (name, callback) => handlers.set(name, callback) },
+      Menu: { buildFromTemplate() {}, setApplicationMenu() {} },
+      shell: { openExternal: async (url) => { externalUrls.push(url); } }
+    },
     "node:fs": { mkdirSync() {}, readFileSync() { throw new Error("No saved settings"); }, writeFileSync() {} },
     "node:path": path,
     "node:url": require("node:url"),
@@ -120,7 +133,7 @@ async function desktopHarness(active = true) {
   await flush();
 
   return {
-    app, window: windows[0], errors, pendingStops, updateOptions, handlers, externalUrls,
+    app, window: windows[0], errors, pendingStops, updateOptions, handlers, externalUrls, messageBoxes,
     invoke: (name, ...args) => handlers.get(name)({ sender: windows[0].webContents, senderFrame: windows[0].webContents.mainFrame }, ...args),
     get updateCheckCalls() { return updateCheckCalls; },
     get stopCalls() { return stopCalls; },
@@ -165,6 +178,7 @@ test("failed Exit cleanup keeps the app open and allows retry", async () => {
   desktop.pendingStops[0].reject(new Error("cleanup failed"));
   assert.equal((await exiting).ok, false);
   assert.equal(desktop.quitCompleted, false);
+  assert.equal(desktop.messageBoxes.length, 0, "In-app Exit already reports its own failure");
   const retry = desktop.invoke("app:quit");
   desktop.pendingStops[1].resolve();
   assert.equal((await retry).ok, true);
@@ -214,11 +228,76 @@ test("failed shutdown retains the control window and allows a later retry", asyn
   await flush();
   assert.equal(desktop.window.isDestroyed(), false);
   assert.equal(desktop.errors.length, 1);
+  assert.equal(desktop.messageBoxes.length, 1);
+  assert.equal(desktop.messageBoxes[0].parent, desktop.window);
+  assert.equal(desktop.messageBoxes[0].options.type, "error");
+  assert.match(desktop.messageBoxes[0].options.message, /could not confirm.*control stopped/i);
+  assert.match(desktop.messageBoxes[0].options.detail, /stayed open.*Try Exit again.*turn off your vehicle/i);
   desktop.window.close();
   assert.equal(desktop.stopCalls, 2);
   desktop.pendingStops[1].resolve();
   await flush();
   assert.equal(desktop.window.isDestroyed(), true);
+  assert.equal(desktop.messageBoxes.length, 1);
+});
+
+test("failed native app quit explains why Axle stayed open and permits retry", async () => {
+  const desktop = await desktopHarness();
+  desktop.app.quit();
+  desktop.app.quit();
+  assert.equal(desktop.stopCalls, 1);
+  desktop.pendingStops[0].reject(new Error("Interrupted shutdown"));
+  await flush();
+  assert.equal(desktop.quitCompleted, false);
+  assert.equal(desktop.window.isDestroyed(), false);
+  assert.equal(desktop.messageBoxes.length, 1);
+  assert.equal(desktop.messageBoxes[0].parent, desktop.window);
+  assert.match(desktop.messageBoxes[0].options.detail, /stayed open.*Try Exit again.*turn off your vehicle/i);
+  desktop.app.quit();
+  assert.equal(desktop.stopCalls, 2);
+  desktop.pendingStops[1].resolve();
+  await flush();
+  assert.equal(desktop.quitCompleted, true);
+  assert.equal(desktop.messageBoxes.length, 1);
+});
+
+test("overlapping native close and app quit failures show one recovery notice", async () => {
+  const desktop = await desktopHarness();
+  desktop.window.close();
+  desktop.app.quit();
+  desktop.pendingStops[0].reject(new Error("Interrupted shutdown"));
+  await flush();
+  assert.equal(desktop.stopCalls, 1);
+  assert.equal(desktop.messageBoxes.length, 1);
+  assert.equal(desktop.window.isDestroyed(), false);
+});
+
+test("a rejected shutdown notice is handled and does not prevent retry", async () => {
+  for (const action of ["close", "quit"]) {
+    const desktop = await desktopHarness(true, { messageBoxFailure: true });
+    if (action === "close") desktop.window.close(); else desktop.app.quit();
+    desktop.pendingStops[0].reject(new Error("Interrupted shutdown"));
+    await flush();
+    assert.equal(desktop.window.isDestroyed(), false);
+    assert.equal(desktop.messageBoxes.length, 1);
+    assert.equal(desktop.errors.length, 2);
+    assert.match(desktop.errors[1][0], /Could not display the shutdown failure notice/);
+    if (action === "close") desktop.window.close(); else desktop.app.quit();
+    assert.equal(desktop.stopCalls, 2);
+    desktop.pendingStops[1].resolve();
+    await flush();
+    assert.equal(desktop.window.isDestroyed(), true);
+  }
+});
+
+test("shutdown recovery notice avoids parenting to a destroyed window", async () => {
+  const desktop = await desktopHarness();
+  desktop.app.quit();
+  desktop.window.destroyed = true;
+  desktop.pendingStops[0].reject(new Error("Interrupted shutdown"));
+  await flush();
+  assert.equal(desktop.messageBoxes.length, 1);
+  assert.equal(desktop.messageBoxes[0].parent, null);
 });
 
 test("automatic startup cannot restart control during window close or app quit", async () => {

@@ -51,14 +51,22 @@ On launch, Axle automatically starts the supported Tumbler connection flow: wait
 Bluetooth, searches for the controller and hub, calibrates PLAYVM, then starts live
 control. Keep the car stationary and its wheels clear during setup. Device loss stops
 motors; the bridge waits and reconnects without a button. If the worker exits, the app
-retries after a short delay. Model selection is available in Settings throughout the flow.
-Only Tumbler is exposed in the desktop
-UI for now; terminal profiles remain unchanged. Selection and connection-setting changes
+retries after a short delay. Settings shows the supported Tumbler model without asking
+users to choose a single option; terminal profiles remain unchanged. Controller changes
 stop the old worker before starting the latest selection, including during setup.
+Advanced hub name/address edits apply together only after **Apply changes** (or Enter),
+so typing cannot restart a session. A deliberate **Stop session** on Drive or in the
+driving guide keeps automatic connection paused until **Resume connection**. Settings
+changes made while paused are used on resume. Diagnostics retains its separate stop/check
+flow; returning to Drive resumes automatically unless driving was deliberately paused.
+The controller's Options/Menu action restarts the connection, as explained in **How to drive**.
+Ready status requires fresh feedback from the selected vehicle and changes to
+**Checking your connection** when feedback expires.
 
 The top-right **Exit** button is available in fullscreen and startup/error screens.
 Its touch target is at least 48 pixels high. Exit stops the bridge before closing the
-app on every desktop platform; failed cleanup leaves the window open for another try.
+app on every desktop platform; failed cleanup leaves the window open with recovery guidance,
+including when closing through the native window or app menu.
 Keyboard focus uses a subdued indicator; pointer/touch dialog restoration has no ring.
 
 Installed builds check the latest stable [GitHub release](https://github.com/o-raskin/axle-app/releases)

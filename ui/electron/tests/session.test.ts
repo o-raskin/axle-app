@@ -42,6 +42,7 @@ const input = (changes: Partial<ConnectionInput> = {}): ConnectionInput => ({
   progress: null,
   pendingAction: null,
   liveTelemetryReceived: false,
+  liveTelemetryFresh: false,
   sessionWasReady: false,
   actionError: null,
   ...changes
@@ -61,14 +62,46 @@ test("ready checklist waits for post-calibration vehicle telemetry", () => {
 });
 
 test("ready hardware with confirmed vehicle telemetry can drive", () => {
-  const state = deriveConnection(input({ progress: progress(), liveTelemetryReceived: true }));
+  const state = deriveConnection(input({ progress: progress(), liveTelemetryReceived: true, liveTelemetryFresh: true }));
   assert.equal(state.phase, "ready");
   assert.equal(state.controllerReady, true);
   assert.equal(state.vehicleReady, true);
 });
 
 test("fresh live telemetry recovers an existing drive after a renderer reload", () => {
-  assert.equal(deriveConnection(input({ liveTelemetryReceived: true })).phase, "ready");
+  assert.equal(deriveConnection(input({ liveTelemetryReceived: true, liveTelemetryFresh: true })).phase, "ready");
+});
+
+test("expired vehicle feedback revokes readiness while retaining the connected hardware checklist", () => {
+  const state = deriveConnection(input({
+    progress: progress(), liveTelemetryReceived: true, liveTelemetryFresh: false, sessionWasReady: true
+  }));
+  assert.equal(state.phase, "connecting");
+  assert.equal(state.title, "Checking your connection");
+  assert.match(state.description, /waiting for your vehicle to respond/);
+  assert.equal(state.controllerReady, true);
+  assert.equal(state.vehicleReady, true);
+  assert.doesNotMatch(state.description, /steering|calibrat|ready to drive/i);
+});
+
+test("an adopted session also loses readiness when its feedback expires and recovers on a fresh frame", () => {
+  const adopted = input({ liveTelemetryReceived: true, sessionWasReady: true });
+  assert.equal(deriveConnection(adopted).phase, "connecting");
+  assert.equal(deriveConnection({ ...adopted, liveTelemetryFresh: true }).phase, "ready");
+});
+
+test("a completed setup still waits for its first post-calibration frame", () => {
+  const state = deriveConnection(input({ progress: progress(), liveTelemetryFresh: false, sessionWasReady: true }));
+  assert.equal(state.phase, "connecting");
+  assert.equal(state.title, "Preparing your vehicle");
+});
+
+test("freshness cannot bypass an incomplete hardware checklist", () => {
+  const state = deriveConnection(input({
+    progress: progress(false, true, false), liveTelemetryReceived: true, liveTelemetryFresh: true
+  }));
+  assert.equal(state.phase, "connecting");
+  assert.equal(state.controllerReady, false);
 });
 
 test("reconnection checklist overrides retained telemetry and readiness", () => {
@@ -150,6 +183,32 @@ test("unexpected errors keep technical details out of consumer copy", () => {
   assert.match(message, /try again/);
   assert.doesNotMatch(message, /RuntimeError|0x194|Users/);
   assert.match(friendlyError("RPC failure", "stop"), /turn off the vehicle/);
+});
+
+test("automatic connection copy describes recovery without requiring a missing Connect action", () => {
+  assert.match(deriveConnection(input({ snapshot: { status: "idle" } })).description, /connect automatically/);
+  const found = deriveConnection(input({
+    snapshot: { status: "running", operation: "discover" },
+    discovery: { bluetoothReady: true, controllerName: "Controller", controllerProfile: "auto", vehicleName: "Vehicle", detail: "" }
+  }));
+  assert.match(found.description, /connect automatically/);
+  assert.doesNotMatch(found.description, /choose|start driving/i);
+  assert.match(friendlyError("Connection lost"), /reconnect automatically/);
+  assert.match(friendlyError("Bluetooth disabled"), /continue automatically/);
+  assert.match(friendlyError("Unexpected failure"), /try again automatically/);
+  assert.match(friendlyError("calibration failed"), /wheels clear/);
+  assert.doesNotMatch(friendlyError("HubPortMismatch"), /choose.*model/i);
+});
+
+test("manual diagnostics do not promise automatic retries", () => {
+  for (const detail of ["Unexpected failure", "Bluetooth disabled", "Bluetooth permission denied", "Connection lost", "Already running", "calibration failed"]) {
+    const message = friendlyError(detail, "diagnostic");
+    assert.match(message, /check again/);
+    assert.doesNotMatch(message, /automatically|continue automatically/);
+  }
+  const state = deriveConnection(input({ snapshot: { status: "error", operation: "scanHub", error: "Unexpected failure" } }));
+  assert.match(state.description, /try the check again/);
+  assert.doesNotMatch(state.description, /automatically/);
 });
 
 test("readiness follows checklist flags even if stage reports ready", () => {

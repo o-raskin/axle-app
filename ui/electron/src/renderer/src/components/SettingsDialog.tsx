@@ -1,3 +1,5 @@
+import { useEffect, useState } from "react";
+import type { FormEvent } from "react";
 import { Dialog } from "./Dialog";
 import { Icon } from "./Icon";
 import type { BridgeController } from "./types";
@@ -17,22 +19,46 @@ export function SettingsDialog({
   onOpenDiagnostics,
   onClose
 }: SettingsDialogProps) {
+  const [hubName, setHubName] = useState(bridge.hubName);
+  const [hubAddress, setHubAddress] = useState(bridge.hubAddress);
+  const [connectionSettingsApplied, setConnectionSettingsApplied] = useState(false);
+
+  useEffect(() => {
+    setHubName(bridge.hubName);
+    setHubAddress(bridge.hubAddress);
+  }, [bridge.hubName, bridge.hubAddress]);
+
+  const connectionSettingsChanged = hubName !== bridge.hubName || hubAddress !== bridge.hubAddress;
+
+  function applyConnectionSettings(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (bridge.loading || !connectionSettingsChanged) return;
+    bridge.setHubName(hubName);
+    bridge.setHubAddress(hubAddress);
+    setConnectionSettingsApplied(true);
+  }
+
   if (!bridge.settings || !bridge.bootstrapState) {
     return null;
   }
 
   return (
-    <Dialog title="Make it yours" subtitle="A few preferences for your next drive." onClose={onClose}>
+    <Dialog title="Settings" subtitle="Preferences for your vehicle and desktop." onClose={onClose}>
       <section className="settings-section">
         <h3>Vehicle</h3>
-        <label className="field">
+        {bridge.profiles?.models.length === 1 ? (
+          <div className="field">
+            <p className="settings-value">{bridge.profiles.models[0].name}</p>
+            <small>Axle manages the connection automatically.</small>
+          </div>
+        ) : <label className="field">
           <span>Vehicle model</span>
           <select aria-label="Vehicle model" value={bridge.selectedModel} disabled={!bridge.profiles || bridge.loading}
             onChange={(event) => bridge.setSelectedModel(event.target.value)}>
             {bridge.profiles?.models.map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}
           </select>
           <small>Tumbler is currently supported. Axle manages the connection automatically.</small>
-        </label>
+        </label>}
       </section>
       <section className="settings-section">
         <h3>Controller</h3>
@@ -50,7 +76,8 @@ export function SettingsDialog({
             ))}
           </select>
           <small>
-            {bridge.bridgeActive && !bridge.discoveryActive
+            {bridge.connectionPaused ? "Changes take effect when you resume the connection."
+              : bridge.bridgeActive && !bridge.discoveryActive
               ? "Axle reconnects automatically when you change the controller."
               : "Automatic finds the right profile for your connected controller."}
           </small>
@@ -81,31 +108,45 @@ export function SettingsDialog({
       <details className="disclosure">
         <summary>Advanced connection <Icon name="chevron" size={16} /></summary>
         <p className="section-description">Use these only if your hub needs a specific name or address.</p>
-        <fieldset disabled={bridge.loading}>
-          <label className="field">
-            <span>Hub name</span>
-            <input
-              value={bridge.hubName}
-              onChange={(event) => bridge.setHubName(event.target.value)}
-              placeholder="Technic Move"
-            />
-          </label>
-          <label className="field">
-            <span>Bluetooth address <span className="optional">Optional</span></span>
-            <input
-              value={bridge.hubAddress}
-              onChange={(event) => bridge.setHubAddress(event.target.value)}
-              placeholder="Find automatically"
-              spellCheck={false}
-              autoCapitalize="off"
-              autoComplete="off"
-            />
-            <small>Leave empty to find the hub by name.</small>
-          </label>
-        </fieldset>
-        {bridge.bridgeActive && !bridge.discoveryActive && (
-          <p className="small-note">Axle reconnects automatically when you change connection settings.</p>
-        )}
+        <form onSubmit={applyConnectionSettings}>
+          <fieldset disabled={bridge.loading}>
+            <label className="field">
+              <span>Hub name</span>
+              <input
+                value={hubName}
+                onChange={(event) => {
+                  setHubName(event.target.value);
+                  setConnectionSettingsApplied(false);
+                }}
+                placeholder="Technic Move"
+              />
+            </label>
+            <label className="field">
+              <span>Bluetooth address <span className="optional">Optional</span></span>
+              <input
+                value={hubAddress}
+                onChange={(event) => {
+                  setHubAddress(event.target.value);
+                  setConnectionSettingsApplied(false);
+                }}
+                placeholder="Find automatically"
+                spellCheck={false}
+                autoCapitalize="off"
+                autoComplete="off"
+              />
+              <small>Leave empty to find the hub by name.</small>
+            </label>
+          </fieldset>
+          <div className="connection-preferences__actions">
+            <button type="submit" className="button" disabled={bridge.loading || !connectionSettingsChanged}>
+              Apply changes
+            </button>
+            {connectionSettingsApplied && <p className="small-note" role="status">Connection settings applied.</p>}
+          </div>
+        </form>
+        <p className="small-note">{bridge.connectionPaused
+          ? "Changes take effect when you resume the connection."
+          : "Applying changes reconnects your vehicle automatically."}</p>
       </details>
 
       <section className="settings-section">

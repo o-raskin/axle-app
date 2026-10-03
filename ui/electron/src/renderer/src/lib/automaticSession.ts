@@ -53,7 +53,7 @@ export class AutomaticSession {
       }
     } catch (error) {
       this.retryAt = now + Math.max(0, Date.now() - requestedAt) + 3000;
-      if (!this.disposed) this.report(error instanceof Error ? error.message : String(error));
+      if (!this.disposed && this.enabled) this.report(error instanceof Error ? error.message : String(error));
     } finally { this.busy = false; }
   }
 }

@@ -83,9 +83,11 @@ export function updateLiveReadiness(
 
 export function friendlyError(
   error: unknown,
-  context: "startup" | "profiles" | "settings" | "connection" | "stop" = "connection"
+  context: "startup" | "profiles" | "settings" | "connection" | "diagnostic" | "stop" = "connection"
 ): string {
   const detail = error instanceof Error ? error.message : String(error);
+  const diagnostic = context === "diagnostic";
+  const retry = diagnostic ? "Try the check again." : "Axle will try again automatically.";
   if (context === "stop") {
     return "The app could not confirm that control has stopped. Try Stop again, or turn off the vehicle.";
   }
@@ -93,16 +95,18 @@ export function friendlyError(
     return "Your preference could not be saved. Try changing it again.";
   }
   if (/permission|not authorized|not authorised|access denied|not permitted|unauthorized/i.test(detail)) {
-    return "Bluetooth access is blocked. Allow this app to use Bluetooth in your system settings, then try again.";
+    return `Bluetooth access is blocked. Allow Axle to use Bluetooth in your system settings. ${diagnostic ? retry : "We’ll continue automatically."}`;
   }
   if (/calibrat/i.test(detail)) {
-    return "Your vehicle could not finish its steering check. Keep the wheels clear, restart the vehicle, then try again.";
+    return `Your vehicle could not finish its steering check. Restart the vehicle with its wheels clear. ${retry}`;
   }
   if (/HubPortMismatch|expected.*ports|missing.*ports|unsupported.*hub/i.test(detail)) {
-    return "This vehicle does not match the selected model. Choose the correct model or scan the vehicle again in Diagnostics.";
+    return "This vehicle does not match the supported Tumbler model. Connect the correct vehicle, or inspect it in Diagnostics.";
   }
   if (/already running|already active/i.test(detail)) {
-    return "Another connection or device check is still active. Stop it before trying again.";
+    return diagnostic
+      ? "Another connection or device check is still active. Stop it before trying the check again."
+      : "Another connection or device check is still active. Axle will try again when it finishes.";
   }
   if (/No module named|ModuleNotFoundError|python.*not found|ENOENT|runtime.*unavailable/i.test(detail)) {
     return "The driving tools could not start. Reopen the app, or enable Developer mode in Settings to open Diagnostics.";
@@ -114,12 +118,13 @@ export function friendlyError(
     return "Vehicle and controller choices could not load. Try again, or enable Developer mode in Settings to open Diagnostics.";
   }
   if (/bluetooth.*(off|disabled|unavailable)|powered off/i.test(detail)) {
-    return "Bluetooth is unavailable. Turn Bluetooth on in your system settings, then try again.";
+    return `Bluetooth is unavailable. Turn it on in your system settings. ${diagnostic ? retry : "We’ll continue automatically."}`;
   }
   if (/disconnect|connection.*lost|not connected/i.test(detail)) {
-    return "The connection was lost. Keep your controller and vehicle nearby, then try connecting again.";
+    return `The connection was lost. Keep your controller and vehicle nearby. ${diagnostic ? retry : "Axle will reconnect automatically."}`;
   }
-  return "The connection could not be completed. Check that your vehicle and controller are on, then try again. Enable Developer mode in Settings for Diagnostics.";
+  if (diagnostic) return "The device check could not finish. Check that your devices are on, then try the check again.";
+  return "The connection could not be completed. Check that your vehicle and controller are on. Axle will try again automatically.";
 }
 
 export function commandResultMessage(event: BridgeProtocolCommandResultEvent): string {
@@ -138,7 +143,7 @@ export function commandResultMessage(event: BridgeProtocolCommandResultEvent): s
     case "profiles":
       return "Vehicle and controller choices are up to date.";
     case "live":
-      return "Drive complete.";
+      return "Connection restarting.";
     case "discover":
       return "Device search complete.";
   }
@@ -150,6 +155,7 @@ export type ConnectionInput = {
   progress: BridgeProtocolSetupEvent | null;
   pendingAction: PendingAction;
   liveTelemetryReceived: boolean;
+  liveTelemetryFresh: boolean;
   sessionWasReady: boolean;
   actionError: string | null;
 };
@@ -160,6 +166,7 @@ export function deriveConnection({
   progress,
   pendingAction,
   liveTelemetryReceived,
+  liveTelemetryFresh,
   sessionWasReady,
   actionError
 }: ConnectionInput): ConnectionView {
@@ -186,7 +193,8 @@ export function deriveConnection({
     return view(
       "error",
       "Connection needs attention",
-      actionError ?? friendlyError(snapshot.error ?? "Connection failed")
+      actionError ?? friendlyError(snapshot.error ?? "Connection failed",
+        snapshot.operation && snapshot.operation !== "live" && snapshot.operation !== "discover" ? "diagnostic" : "connection")
     );
   }
   if (snapshot.status === "stopping") {
@@ -198,7 +206,7 @@ export function deriveConnection({
   if (active && operation === "discover") {
     const found = Boolean(discovery?.controllerName && discovery?.vehicleName);
     return view(found ? "detected" : "discovering", found ? "Your devices are nearby" : "Finding your devices",
-      found ? "Choose your vehicle model, then start driving when you’re ready."
+      found ? "Your controller and vehicle have been found. Axle will connect automatically."
         : discovery && !discovery.bluetoothReady ? friendlyError(discovery.detail || "Bluetooth unavailable")
           : "Turn on your vehicle and pair your controller. We’ll find both.",
       { bluetoothReady: discovery?.bluetoothReady ?? false, controllerReady: Boolean(discovery?.controllerName), vehicleReady: false });
@@ -216,7 +224,7 @@ export function deriveConnection({
     if (snapshot.operation === "live" && snapshot.status === "exited") {
       return view("disconnected", "Drive ended", "Axle will reconnect automatically. Keep your devices nearby.");
     }
-    return view("idle", "Ready when you are", "Turn on your controller and vehicle, then connect to start driving.");
+    return view("idle", "Ready when you are", "Turn on your controller and vehicle. Axle will connect automatically.");
   }
 
   const readiness = {
@@ -225,6 +233,9 @@ export function deriveConnection({
     vehicleReady: flags.vehicleReady
   };
   if (flags.liveReady && flags.controllerReady && flags.vehicleReady && liveTelemetryReceived) {
+    if (!liveTelemetryFresh) {
+      return view("connecting", "Checking your connection", "We’re waiting for your vehicle to respond. Keep your controller and vehicle nearby.", readiness);
+    }
     return view("ready", "Ready to drive", "Your controller is in charge. Enjoy the drive.", readiness);
   }
   const details = `${progress?.message ?? ""} ${progress?.detail ?? ""}`;
